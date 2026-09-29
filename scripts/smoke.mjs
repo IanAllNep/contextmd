@@ -84,12 +84,19 @@ await check('selecting a directory resolves its generic effective context', asyn
   await backend.hover();
   await backend.locator('.row-action').click();
   await page.locator('.segment-path', { hasText: '/backend/AGENTS.md' }).first().waitFor();
-  const paths = await page
-    .locator('.section', { hasText: 'Loaded at launch' })
-    .locator('.segment-path')
-    .allTextContents();
-  if (paths.join(',') !== '/AGENTS.md,/CLAUDE.md,/backend/AGENTS.md')
-    throw new Error(`unexpected order: ${paths}`);
+  // The context refreshes asynchronously after retargeting; poll until it settles.
+  const expected = '/AGENTS.md,/CLAUDE.md,/backend/AGENTS.md';
+  let paths = '';
+  for (const deadline = Date.now() + 5000; Date.now() < deadline; await wait(100)) {
+    paths = (
+      await page
+        .locator('.section', { hasText: 'Loaded at launch' })
+        .locator('.segment-path')
+        .allTextContents()
+    ).join(',');
+    if (paths === expected) break;
+  }
+  if (paths !== expected) throw new Error(`unexpected order: ${paths}`);
   await page.locator('.diagnostic', { hasText: 'Potential conflict' }).waitFor();
 });
 await shot('02-generic-context');
