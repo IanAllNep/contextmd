@@ -1,0 +1,30 @@
+{
+  "name": "@contextmd/core",
+  "version": "0.1.0",
+  "private": true,
+  "description": "UI-independent indexing, parsing and context resolution for agent instruction Markdown.",
+  "license": "MIT",
+  "type": "module",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./node": "./src/node.ts"
+  },
+  "dependencies": {
+    "github-slugger": "^2.0.0",
+    "ignore": "^7.0.5",
+    "mdast-util-to-string": "^4.0.0",
+    "picomatch": "^4.0.3",
+    "remark-frontmatter": "^5.0.0",
+    "remark-gfm": "^4.0.1",
+    "remark-parse": "^11.0.0",
+    "unified": "^11.0.5",
+    "unist-util-visit": "^5.0.0",
+    "yaml": "^2.8.0"
+  },
+  "devDependencies": {
+    "@types/mdast": "^4.0.4",
+    "@types/picomatch": "^4.0.0"
+  }
+}

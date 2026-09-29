@@ -1,0 +1,20 @@
+{
+  "name": "@contextmd/cli",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Headless ContextMD: scan a repository and print effective agent context.",
+  "license": "MIT",
+  "type": "module",
+  "bin": {
+    "contextmd": "dist/cli.js"
+  },
+  "scripts": {
+    "build": "vite build"
+  },
+  "dependencies": {
+    "@contextmd/core": "0.1.0"
+  },
+  "devDependencies": {
+    "vite": "^7.3.6"
+  }
+}
