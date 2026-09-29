@@ -1,12 +1,14 @@
 import { useDeferredValue, useEffect, useMemo, useRef, type ReactNode } from 'react';
 import Markdown, { type Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import type { Root, RootContent } from 'mdast';
 import { api } from '../api';
 import { resolveHref } from '../lib/format';
 import { openFile, toast, useStore } from '../store';
 
 /**
- * Renders untrusted Markdown. Raw HTML is never rendered (no rehype-raw): HTML nodes are dropped.
+ * Renders untrusted Markdown. Raw HTML is never rendered (no rehype-raw): it is shown as escaped
+ * text, and HTML comments are hidden.
  * Images are replaced by placeholders (no local file or remote loading; CSP blocks both).
  * Links: internal → open in the app, external http(s) → system browser.
  */
@@ -107,12 +109,26 @@ export function Preview({ path, content }: { path: string; content: string }) {
   return (
     <div className="preview" ref={ref}>
       <article className="markdown-body">
-        <Markdown remarkPlugins={[remarkGfm]} components={components}>
+        <Markdown remarkPlugins={[remarkGfm, hideHtmlComments]} components={components}>
           {stripFrontmatter(deferred)}
         </Markdown>
       </article>
     </div>
   );
+}
+
+/**
+ * Other raw HTML is shown as escaped text (never rendered), but HTML comments are hidden,
+ * as on GitHub. They are maintainer notes, and Claude Code strips them too.
+ */
+function hideHtmlComments() {
+  const isComment = (n: RootContent) => n.type === 'html' && /^\s*<!--[\s\S]*-->\s*$/.test(n.value);
+  const prune = (node: { children?: RootContent[] }) => {
+    if (!node.children) return;
+    node.children = node.children.filter((c) => !isComment(c));
+    node.children.forEach((c) => prune(c as { children?: RootContent[] }));
+  };
+  return (tree: Root) => prune(tree);
 }
 
 /** Frontmatter is shown in the inspector, not rendered as a heading/hr. Keeps line numbers aligned. */

@@ -33,6 +33,17 @@ export function contentWords(normalized: string): Set<string> {
   );
 }
 
+/** First original word for each stem, so explanations show real words ("migration", not "migr"). */
+function surfaceWords(normalized: string): Map<string, string> {
+  const map = new Map<string, string>();
+  for (const w of normalized.split(' ')) {
+    if (w.length <= 2 || STOPWORDS.has(w)) continue;
+    const st = stem(w);
+    if (!map.has(st)) map.set(st, w);
+  }
+  return map;
+}
+
 export function isNegative(normalized: string): boolean {
   return NEGATION.test(normalized);
 }
@@ -99,7 +110,7 @@ export function analyzeContext(
           rule: 'polarity-overlap',
           heuristic: true,
           message: 'Potential conflict',
-          explanation: `One source says not to do something and another says to do it. Both mention: ${shared.join(', ')}. This is a word-overlap heuristic, so verify manually.`,
+          explanation: `One source says not to do something and another says to do it. Both mention: ${shared.map((w) => surfaceWords(a.s.normalized).get(w) ?? w).join(', ')}. This is a word-overlap heuristic, so verify manually.`,
           sources: [
             { path: a.s.path, line: a.s.line, excerpt: a.s.text },
             { path: b.s.path, line: b.s.line, excerpt: b.s.text },

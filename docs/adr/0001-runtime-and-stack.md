@@ -49,7 +49,7 @@ extension remains possible later — the `FileSystem` abstraction in core exists
   `remark-frontmatter`, `yaml` for frontmatter. Real AST with source positions — needed for
   headings, links, code blocks and line-level provenance.
 - **Rendering:** `react-markdown` + `remark-gfm` **without** `rehype-raw`: raw HTML in
-  Markdown is never rendered (HTML nodes are dropped). Remote images are blocked by CSP.
+  Markdown is never rendered (it is shown as escaped text; comments are hidden). Remote images are blocked by CSP.
 - **Editor:** CodeMirror 6 (small, modular, good Markdown mode, easy to embed) instead of
   Monaco (large, heavier to bundle in Electron, IDE-scale features we don't need yet).
 - **State management:** Zustand — tiny, no boilerplate, works well with IPC-driven

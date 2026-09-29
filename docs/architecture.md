@@ -169,6 +169,7 @@ disk state), view mode, context target and adapter, search state. IPC events
 - Renderer: `contextIsolation: true`, `sandbox: true`, `nodeIntegration: false`, strict CSP
   (`default-src 'self'`, no remote images/scripts), navigation and `window.open` blocked;
   external `http(s)` links open in the system browser only on click.
-- Raw HTML inside Markdown is never rendered (dropped by react-markdown without rehype-raw).
+- Raw HTML inside Markdown is never rendered: without rehype-raw it is shown as escaped text,
+  and HTML comments are hidden.
 - Main validates every path against the repository root (after `realpath`) — symlinks that
   escape the repo are not followed.

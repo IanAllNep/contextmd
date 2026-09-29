@@ -25,7 +25,8 @@
     "check": "npm run typecheck && npm run lint && npm run test && npm run build",
     "cli": "node packages/cli/dist/cli.js",
     "smoke": "node scripts/smoke.mjs",
-    "postinstall": "node scripts/ensure-electron.mjs"
+    "postinstall": "node scripts/ensure-electron.mjs",
+    "screenshots": "node scripts/screenshots.mjs"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.0",

@@ -1,7 +1,12 @@
 # ContextMD
 
+[![CI](https://github.com/IanAllNep/contextmd/actions/workflows/ci.yml/badge.svg)](https://github.com/IanAllNep/contextmd/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
 > Working title. A local-first IDE for understanding, editing and debugging the Markdown that
 > controls AI coding agents.
+
+![ContextMD demo: generic context with a detected conflict, the Claude Code view, and line-level provenance](docs/screenshots/demo.gif)
 
 ## The problem
 
@@ -41,8 +46,31 @@ ContextMD's job is to surface findings like that one.
 
 ## Screenshots
 
-_Placeholder: add screenshots of the three-pane layout, effective context and provenance view._
-(`npm run smoke` writes screenshots to `scripts/.smoke/`.)
+**Claude Code view.** With a root `CLAUDE.md`, Claude never reads `backend/AGENTS.md`. `AGENTS.md`
+arrives only through the `@AGENTS.md` import, and the HTML comment is stripped before Claude
+sees it.
+
+![Claude Code effective context with loaded and not-loaded sources](docs/screenshots/claude-code-context.png)
+
+**Generic view with diagnostics.** Four sources, per-source token estimates, and a potential
+conflict between the root and `backend/` instructions.
+
+![Generic effective context showing a potential conflict](docs/screenshots/generic-context-conflict.png)
+
+**Line-level provenance.** Every line of the concatenated context maps back to its source file
+and line. Click a line to jump there.
+
+![Full effective context view with source gutter](docs/screenshots/effective-context-provenance.png)
+
+<details>
+<summary>More: search and command palette</summary>
+
+![Repository-wide Markdown search](docs/screenshots/search.png)
+![Command palette](docs/screenshots/command-palette.png)
+
+</details>
+
+Regenerate these with `npm run build && npm run screenshots`.
 
 ## Features
 
@@ -139,6 +167,7 @@ npm run typecheck
 npm run lint
 npm run build        # CLI + desktop production build
 npm run smoke        # drives the built app with Playwright (requires npm run build)
+npm run screenshots  # regenerates docs/screenshots (requires npm run build; GIF needs ffmpeg)
 npm run check        # typecheck + lint + test + build
 ```
 
@@ -165,7 +194,7 @@ is uncertain).
   you click.
 - Opening a repository **never executes** anything from it: no scripts, hooks, MCP servers or
   commands found in Markdown.
-- Markdown is treated as untrusted. Raw HTML is not rendered, images aren't loaded, and a strict
+- Markdown is treated as untrusted. Raw HTML is never rendered (it shows as text), images aren't loaded, and a strict
   CSP applies.
 - The renderer is sandboxed. All file access goes through the main process, which rejects paths
   outside the opened repository (including through symlinks).

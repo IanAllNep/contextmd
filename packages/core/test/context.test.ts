@@ -283,6 +283,7 @@ describe('diagnostics', () => {
       ['AGENTS.md', 14],
       ['backend/AGENTS.md', 7],
     ]);
+    expect(conflicts[0]!.explanation).toContain('migrations'); // real words, not stems
     expect(analyzeContext(r).some((d) => d.kind === 'conflict')).toBe(false); // flag off by default
   });
 
