@@ -69,6 +69,11 @@ and line. Click a line to jump there.
 
 ![Full effective context view with source gutter](docs/screenshots/effective-context-provenance.png)
 
+**Start the agent where the context applies.** The embedded terminal opens in the launch
+directory with `claude` typed at the prompt. Nothing runs until you press Enter.
+
+![Embedded terminal with Claude Code typed at the prompt](docs/screenshots/terminal-start-agent.png)
+
 <details>
 <summary>More: search and command palette</summary>
 
@@ -134,16 +139,29 @@ Status labels: ✅ implemented · 🧪 experimental · 🗺️ roadmap
     comment stripping)
   - **Codex CLI**: documented semantics (git root → cwd, one file per directory, override,
     32 KiB budget with truncation)
+  - **Gemini CLI, Amp, GitHub Copilot CLI, OpenCode, Cursor CLI, Aider**: built-in
+    declarative specs following each vendor's docs; open questions are shown as notes
+- ✅ **Your own harnesses without code**: describe an agent in YAML/JSON
+  ([harness specs](docs/harness-specs.md)) in your harness folder or in
+  `.contextmd/harnesses/` in a repository. Invalid specs are reported, never fatal.
 - ✅ Files that exist but are **not loaded** are shown with the reason
 - ✅ Line-level provenance: open the full context view and click any line to jump to its source
 - ✅ Copy or export as Markdown, plain text or JSON, with `<!-- SOURCE: … -->` boundaries
 - ✅ Diagnostics: duplicated instructions across sources
 - 🧪 Potential-conflict hints (deterministic word-overlap heuristic; can be switched off)
-- ✅ Headless CLI: `contextmd scan | context | search`
+- ✅ Headless CLI: `contextmd scan | context | search | harnesses`
+
+**Terminal**
+
+- ✅ Embedded terminal (xterm.js + node-pty) opened in the launch directory; multiple tabs,
+  resizable, `⌃`` to toggle
+- ✅ **Start ‹agent›**: opens a terminal in the launch directory with the agent's command
+  (`claude`, `codex`, `gemini`, …) **typed but not run**; you press Enter
 
 **Roadmap**
 
-- 🗺️ Gemini CLI, Cursor, Copilot, Aider, Windsurf adapters (only when semantics are verified)
+- 🗺️ More harnesses (Windsurf, Qwen Code, Continue, …) once their behavior is verified; configurable
+  file names (Gemini `context.fileName`, Codex fallbacks) for spec-based harnesses
 - 🗺️ Opt-in reading of user-level files (`~/.claude/CLAUDE.md`, `~/.codex/AGENTS.md`)
 - 🗺️ Context diff between git branches and commits; "what does this PR change for the agent?"
 - 🗺️ Real tokenizers (per-model), context budget warnings
@@ -167,7 +185,7 @@ Then click **Open repository…**, or **Open example project** to explore
 To open a folder directly: `CONTEXTMD_OPEN=/path/to/repo npm run dev`.
 
 If Electron fails to start after install because its binary is missing, run
-`node scripts/ensure-electron.mjs`. This happens with npm configurations that skip install
+`node scripts/ensure-native.mjs`. This happens with npm configurations that skip install
 scripts.
 
 ### CLI
@@ -205,7 +223,9 @@ filesystem → scanner → Markdown parser (remark AST) → repository index →
   filesystem; the sandboxed renderer only sees a typed API.
 
 See [docs/architecture.md](docs/architecture.md),
-[ADR 0001](docs/adr/0001-runtime-and-stack.md) and
+[ADR 0001](docs/adr/0001-runtime-and-stack.md),
+[ADR 0002](docs/adr/0002-declarative-harnesses-and-terminal.md),
+[docs/harness-specs.md](docs/harness-specs.md) and
 [docs/harness-semantics.md](docs/harness-semantics.md) (what each adapter is based on, and what
 is uncertain).
 
@@ -213,8 +233,12 @@ is uncertain).
 
 - Everything is local. There is no telemetry, no account, and no network access except links
   you click.
-- Opening a repository **never executes** anything from it: no scripts, hooks, MCP servers or
-  commands found in Markdown.
+- ContextMD never executes anything **on its own**. Opening a repository runs nothing: no
+  scripts, hooks, MCP servers or commands found in Markdown.
+- The embedded terminal starts a shell only when you click, in a directory inside the opened
+  repository. "Start ‹agent›" types the command without pressing Enter. Repository harness
+  specs cannot define commands, and built-in ids can't be overridden
+  ([ADR 0002](docs/adr/0002-declarative-harnesses-and-terminal.md)).
 - Markdown is treated as untrusted. Raw HTML is never rendered (it shows as text), images aren't loaded, and a strict
   CSP applies.
 - The renderer is sandboxed. All file access goes through the main process, which rejects paths

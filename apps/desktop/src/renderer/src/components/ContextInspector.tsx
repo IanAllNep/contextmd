@@ -1,7 +1,15 @@
 import type { ContextSegment, Diagnostic } from '@contextmd/core';
 import { api } from '../api';
 import { displayPath, fmtTokens } from '../lib/format';
-import { copyContext, navigate, openContextTab, openFile, setTarget, useStore } from '../store';
+import {
+  copyContext,
+  navigate,
+  newTerminal,
+  openContextTab,
+  openFile,
+  setTarget,
+  useStore,
+} from '../store';
 import { Icon } from './Icon';
 import { Section } from './Section';
 
@@ -22,6 +30,12 @@ const STATUS_ICON: Record<ContextSegment['status'], string> = {
   skipped: '○',
   'not-read': '?',
 };
+
+const ORIGIN_GROUPS = [
+  ['builtin', 'Built-in'],
+  ['user', 'Your harnesses'],
+  ['repository', 'This repository'],
+] as const;
 
 /** Stable hue per source so segments are recognisable across views. */
 export function segmentHue(index: number): number {
@@ -147,19 +161,29 @@ export function ContextInspector() {
             value={adapter.id}
             onChange={(e) => useStore.setState({ adapterId: e.target.value })}
           >
-            {snapshot.adapters.map((a) => (
-              <option key={a.id} value={a.id}>
-                {a.name}
-                {a.detected && a.id !== 'generic' ? ' •' : ''}
-              </option>
-            ))}
+            {ORIGIN_GROUPS.map(([origin, label]) => {
+              const list = snapshot.adapters.filter((a) => a.origin === origin);
+              if (list.length === 0) return null;
+              return (
+                <optgroup key={origin} label={label}>
+                  {list.map((a) => (
+                    <option key={a.id} value={a.id}>
+                      {a.name}
+                      {a.detected && a.id !== 'generic' ? ' •' : ''}
+                    </option>
+                  ))}
+                </optgroup>
+              );
+            })}
           </select>
           <span
             className={`fidelity fidelity-${adapter.fidelity}`}
             title={
               adapter.fidelity === 'heuristic'
                 ? 'ContextMD approximation, not a specific tool'
-                : `Follows the vendor documentation${adapter.verifiedOn ? ` (checked ${adapter.verifiedOn})` : ''}`
+                : adapter.fidelity === 'declared'
+                  ? 'Defined in a spec file; ContextMD has not verified the agent behaves this way'
+                  : `Follows the vendor documentation${adapter.verifiedOn ? ` (checked ${adapter.verifiedOn})` : ''}`
             }
           >
             {adapter.fidelity}
@@ -177,7 +201,31 @@ export function ContextInspector() {
               {r.title} <Icon name="external" size={10} />
             </button>
           ))}
+          {adapter.sourceFile && (
+            <span className="adapter-source">
+              Defined in <span className="mono">{adapter.sourceFile}</span>
+              {adapter.origin === 'repository' && ' (repository specs cannot start commands)'}
+            </span>
+          )}
         </p>
+        {snapshot.harnessProblems.length > 0 && (
+          <details className="notice error spec-problems">
+            <summary>
+              {snapshot.harnessProblems.length} harness spec
+              {snapshot.harnessProblems.length === 1 ? ' has' : 's have'} problems
+            </summary>
+            {snapshot.harnessProblems.map((p) => (
+              <div key={p.source}>
+                <span className="mono">{p.source}</span>
+                <ul>
+                  {p.errors.map((e) => (
+                    <li key={e}>{e}</li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </details>
+        )}
         {adapter.options.map((o) => (
           <label key={o.id} className="field" title={o.description}>
             <span className="field-label">{o.label}</span>
@@ -229,6 +277,25 @@ export function ContextInspector() {
           >
             <Icon name="pin" size={12} />
           </button>
+        </div>
+        <div className="field">
+          <span className="field-label">Terminal</span>
+          <button
+            className="btn small"
+            onClick={() => void newTerminal()}
+            title={`Open a shell in ${displayPath(target.cwd)}`}
+          >
+            <Icon name="terminal" size={12} /> Open here
+          </button>
+          {adapter.command && (
+            <button
+              className="btn small"
+              onClick={() => void newTerminal({ adapterId: adapter.id })}
+              title={`Open a shell in ${displayPath(target.cwd)} with \`${adapter.command}\` typed at the prompt (you press Enter)`}
+            >
+              Start {adapter.name}
+            </button>
+          )}
         </div>
         <div className="field">
           <span className="field-label">Working on</span>

@@ -3,6 +3,7 @@
 :root {
   --sidebar-w: 270px;
   --inspector-w: 360px;
+  --terminal-h: 280px;
   --font-ui: -apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, system-ui, sans-serif;
   --font-mono: ui-monospace, 'SF Mono', 'JetBrains Mono', Menlo, Consolas, monospace;
   --editor-font-size: 13px;
@@ -1732,4 +1733,119 @@ button.chip:hover {
 }
 .toast.info {
   border-left: 3px solid var(--accent);
+}
+
+/* --------------------------------------------------------------- terminal */
+
+.terminal-panel {
+  flex: none;
+  height: var(--terminal-h);
+  display: flex;
+  flex-direction: column;
+  border-top: 1px solid var(--border);
+  background: var(--bg);
+  position: relative;
+  min-height: 0;
+}
+.terminal-resizer {
+  position: absolute;
+  top: -3px;
+  left: 0;
+  right: 0;
+  height: 6px;
+  cursor: row-resize;
+  z-index: 2;
+}
+.terminal-resizer:hover {
+  background: var(--accent);
+}
+.terminal-header {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 30px;
+  padding: 0 6px 0 0;
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+}
+.terminal-tabs {
+  display: flex;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.terminal-tab {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 29px;
+  padding: 0 4px 0 12px;
+  border-right: 1px solid var(--border);
+  color: var(--text-muted);
+  cursor: pointer;
+  white-space: nowrap;
+  font-size: 12px;
+}
+.terminal-tab.active {
+  color: var(--text);
+  background: var(--bg);
+  box-shadow: inset 0 2px 0 var(--accent);
+}
+.terminal-tab.exited span:first-child {
+  text-decoration: line-through;
+}
+.terminal-tab:hover .tab-close,
+.terminal-tab.active .tab-close {
+  opacity: 1;
+}
+.terminal-cwd {
+  color: var(--text-faint);
+  font: 11px var(--font-mono);
+}
+.terminal-hint {
+  font-size: 11.5px;
+  color: var(--warn);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.terminal-hint code {
+  font-family: var(--font-mono);
+}
+.terminal-body {
+  flex: 1;
+  min-height: 0;
+  padding: 4px 0 0 10px;
+  overflow: hidden;
+}
+.xterm-host {
+  height: 100%;
+}
+.xterm-host .xterm-viewport {
+  background: transparent !important;
+}
+
+.fidelity-declared {
+  color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+}
+.adapter-source {
+  display: block;
+  margin-top: 3px;
+  color: var(--text-faint);
+}
+.spec-problems {
+  margin: 0;
+}
+.spec-problems summary {
+  cursor: pointer;
+}
+.spec-problems ul {
+  margin: 2px 0 6px;
+  padding-left: 18px;
+}
+.btn.small {
+  padding: 2px 8px;
+  font-size: 12px;
 }

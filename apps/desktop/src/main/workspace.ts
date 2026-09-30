@@ -4,10 +4,12 @@ import { basename, join, sep } from 'node:path';
 import { watch, type FSWatcher } from 'chokidar';
 import {
   analyzeContext,
-  BUILTIN_ADAPTERS,
+  buildRegistry,
+  loadRepoSpecs,
+  loadSpecsFromDir,
+  REPO_SPEC_DIR,
   DEFAULT_IGNORED_DIRS,
   exportContext,
-  getAdapter,
   isMarkdownPath,
   normalizeRel,
   renderContext,
@@ -15,11 +17,13 @@ import {
   toRel,
   type ExportFormat,
   type FileChange,
+  type HarnessRegistry,
   type IndexProgress,
   type SearchOptions,
 } from '@contextmd/core';
 import { NodeFileSystem, toPosix } from '@contextmd/core/node';
 import type {
+  AdapterInfo,
   ContextRequest,
   ContextResponse,
   DocumentDetail,
@@ -47,24 +51,45 @@ export class Workspace {
   private applying: Promise<void> = Promise.resolve();
   private version = 1;
   private indexedAt = Date.now();
+  registry: HarnessRegistry = buildRegistry();
 
   private constructor(
     readonly root: string,
     private readonly realRoot: string,
     readonly index: RepositoryIndex,
     private readonly emit: (e: RepoEvent) => void,
+    private readonly userSpecDir: string | null,
   ) {}
 
-  static async open(root: string, emit: (e: RepoEvent) => void): Promise<Workspace> {
+  /**
+   * @param userSpecDir the user's own harness spec folder (trusted), if any. Repository specs in
+   *   `.contextmd/harnesses` are always loaded as untrusted data.
+   */
+  static async open(
+    root: string,
+    emit: (e: RepoEvent) => void,
+    userSpecDir: string | null = null,
+  ): Promise<Workspace> {
     const stat = await fsp.stat(root);
     if (!stat.isDirectory()) throw new Error(`Not a folder: ${root}`);
     const realRoot = toPosix(await fsp.realpath(root));
     const index = await RepositoryIndex.open(realRoot, new NodeFileSystem(), {
       onProgress: (progress: IndexProgress) => emit({ type: 'indexing', progress }),
     });
-    const ws = new Workspace(realRoot, realRoot, index, emit);
+    const ws = new Workspace(realRoot, realRoot, index, emit, userSpecDir);
+    await ws.loadHarnesses();
     ws.startWatching();
     return ws;
+  }
+
+  /** (Re)loads user and repository harness specs and reclassifies files they name. */
+  async loadHarnesses(): Promise<void> {
+    const fs = new NodeFileSystem();
+    const user = this.userSpecDir
+      ? await loadSpecsFromDir(fs, toPosix(this.userSpecDir), 'user', 'your harness folder')
+      : { specs: [], problems: [] };
+    this.registry = buildRegistry(user, await loadRepoSpecs(this.index));
+    this.index.setPatterns(this.registry.patterns);
   }
 
   get name(): string {
@@ -78,20 +103,25 @@ export class Workspace {
       version: this.version,
       files: this.index.summaries(),
       directories: this.index.directories(),
-      adapters: BUILTIN_ADAPTERS.map((a) => {
+      adapters: this.registry.adapters.map((a) => {
         const det = a.detect(this.index);
-        const info = {
+        const info: AdapterInfo = {
           id: a.id,
           name: a.name,
           description: a.description,
           fidelity: a.fidelity,
           references: a.references,
           options: a.options,
+          origin: a.origin ?? 'builtin',
           detected: det.detected,
           evidence: det.evidence,
         };
-        return a.verifiedOn ? { ...info, verifiedOn: a.verifiedOn } : info;
+        if (a.verifiedOn) info.verifiedOn = a.verifiedOn;
+        if (a.command) info.command = a.command;
+        if (a.sourceFile) info.sourceFile = a.sourceFile;
+        return info;
       }),
+      harnessProblems: this.registry.problems,
       scanTruncated: this.index.scanTruncated,
       ignoredCount: this.index.ignoredCount,
       indexedAt: this.indexedAt,
@@ -100,6 +130,7 @@ export class Workspace {
 
   async reload(): Promise<RepoSnapshot> {
     await this.index.rescan();
+    await this.loadHarnesses();
     this.version++;
     this.indexedAt = Date.now();
     return this.snapshot();
@@ -133,6 +164,19 @@ export class Workspace {
         probe = parent;
       }
     }
+  }
+
+  /** Validates a repo-relative directory ('' = root) and returns its absolute path. */
+  async resolveDir(rel: string): Promise<string> {
+    if (typeof rel !== 'string') throw new PathError('Invalid path');
+    const norm = normalizeRel(rel);
+    if (norm === null) throw new PathError(`Path is outside the repository: ${rel}`);
+    const abs = norm === '' ? this.root : join(this.root, ...norm.split('/'));
+    const real = toPosix(await fsp.realpath(abs));
+    if (toRel(this.realRoot, real) === null)
+      throw new PathError(`Path resolves outside the repository: ${rel}`);
+    if (!(await fsp.stat(real)).isDirectory()) throw new PathError(`Not a directory: ${rel}`);
+    return abs;
   }
 
   // ------------------------------------------------------------------ files
@@ -200,7 +244,7 @@ export class Workspace {
   // ---------------------------------------------------------------- context
 
   async resolveContext(req: ContextRequest): Promise<ContextResponse> {
-    const adapter = getAdapter(req.adapterId);
+    const adapter = this.registry.adapters.find((a) => a.id === req.adapterId);
     if (!adapter) throw new Error(`Unknown adapter: ${req.adapterId}`);
     const cwd = normalizeRel(req.target.cwd ?? '');
     if (cwd === null) throw new PathError('Target is outside the repository');
@@ -245,7 +289,8 @@ export class Workspace {
         type === 'addDir' ||
         type === 'unlinkDir' ||
         isMarkdownPath(rel) ||
-        rel.endsWith('.gitignore')
+        rel.endsWith('.gitignore') ||
+        rel.startsWith(REPO_SPEC_DIR + '/')
       ) {
         this.enqueue([{ type, path: rel }]);
       }
@@ -274,9 +319,13 @@ export class Workspace {
     // Serialize batches so the index never sees overlapping updates.
     this.applying = this.applying.then(async () => {
       try {
-        const summary = await this.index.applyChanges(batch);
+        const specsChanged = batch.some((c) => c.path.startsWith(REPO_SPEC_DIR + '/'));
+        const summary = await this.index.applyChanges(
+          batch.filter((c) => !c.path.startsWith(REPO_SPEC_DIR + '/') || c.type.endsWith('Dir')),
+        );
+        if (specsChanged) await this.loadHarnesses();
         const touched = summary.added.length + summary.changed.length + summary.removed.length;
-        if (touched === 0 && !summary.directoriesChanged) return;
+        if (touched === 0 && !summary.directoriesChanged && !specsChanged) return;
         this.version++;
         this.indexedAt = Date.now();
         this.emit({ type: 'index-changed', snapshot: this.snapshot(), summary });

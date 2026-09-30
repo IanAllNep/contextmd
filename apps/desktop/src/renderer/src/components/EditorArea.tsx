@@ -14,6 +14,7 @@ import { Editor } from './Editor';
 import { Icon } from './Icon';
 import { Preview } from './Preview';
 import { RepoOverview } from './RepoOverview';
+import { TerminalPanel } from './TerminalPanel';
 
 function Tabs() {
   const tabs = useStore((s) => s.tabs);
@@ -171,6 +172,7 @@ export function EditorArea() {
     <main className="editor-area">
       <Tabs />
       <div className="editor-body">{body}</div>
+      <TerminalPanel />
     </main>
   );
 }

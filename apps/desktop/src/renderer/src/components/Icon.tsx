@@ -17,6 +17,7 @@ const PATHS: Record<string, string> = {
   pin: 'M6 2h4l-.5 4 2 2H4.5l2-2z M8 8v6',
   refresh: 'M13 8a5 5 0 1 1-1.5-3.5 M13 2v3h-3',
   split: 'M2 2.5h12v11H2z M8 2.5v11',
+  terminal: 'M2 2.5h12v11H2z M4.5 6l2 2-2 2 M8 10.5h3.5',
 };
 
 export function Icon({

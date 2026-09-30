@@ -1,20 +1,11 @@
 import picomatch from 'picomatch';
 import { identity, removeLines, type MappedContent } from '../context/transform';
-import type { ContextSegment, ContextTarget, LoadTiming, SegmentScope } from '../context/types';
+import type { ContextTarget, LoadTiming, SegmentScope } from '../context/types';
 import type { RepositoryIndex } from '../index/repository-index';
-import { parseMarkdown } from '../markdown/parse';
 import type { LineRange, MarkdownDocument } from '../markdown/types';
-import {
-  ancestorChain,
-  basenameRel,
-  dirnameRel,
-  isWithin,
-  joinRel,
-  normalizeRel,
-  toRel,
-} from '../paths';
-import { isMarkdownPath } from '../scan/ignore';
+import { ancestorChain, basenameRel, dirnameRel, isWithin, joinRel } from '../paths';
 import { ContextBuilder } from './builder';
+import { expandAtImports } from './imports';
 import { optionValue, type AdapterOptions, type HarnessAdapter } from './types';
 
 /** Documented: "Imported files can recursively import other files, with a maximum depth of four hops." */
@@ -106,80 +97,16 @@ async function loadFile(
       `${entry.doc.htmlComments.length} block-level HTML comment(s) stripped (not sent to Claude).`,
     );
   }
-  await expandImports(ctx, s, entry.doc, 1);
-}
-
-async function expandImports(
-  ctx: Ctx,
-  parent: ContextSegment,
-  doc: MarkdownDocument,
-  hop: number,
-): Promise<void> {
-  const { index, b, target } = ctx;
-  if (parent.source.type !== 'repo') return;
-  const fromPath = parent.source.path;
-  for (const ref of doc.atReferences) {
-    const via = { segmentId: parent.id, path: fromPath, line: ref.line };
-    const base = {
-      scope: 'imported' as const,
-      timing: parent.timing,
-      reason: `Imported by ${ref.raw} at /${fromPath}:${ref.line}`,
-      depth: hop,
-      via,
-    };
-    let rel: string | null;
-    if (ref.path.startsWith('~/')) {
-      b.skip(
-        { ...base, source: { type: 'external', path: ref.path } },
-        'Home-directory import: outside the opened repository, not read by ContextMD.',
-        'not-read',
-      );
-      continue;
-    } else if (ref.path.startsWith('/')) {
-      rel = toRel(index.root, ref.path);
-    } else {
-      rel = normalizeRel(joinRel(dirnameRel(fromPath), ref.path));
-    }
-    if (rel === null) {
-      b.skip(
-        { ...base, source: { type: 'external', path: ref.path } },
-        'Resolves outside the opened repository; not read by ContextMD.',
-        'not-read',
-      );
-      continue;
-    }
-    const source = { type: 'repo' as const, path: rel };
-    if (hop > CLAUDE_MAX_IMPORT_HOPS) {
-      b.skip(
-        { ...base, source },
-        `Exceeds the maximum import depth of ${CLAUDE_MAX_IMPORT_HOPS} hops.`,
-      );
-      continue;
-    }
-    if (b.loadedBy(rel)) {
-      b.skip({ ...base, source }, 'Already loaded earlier in this context.');
-      continue;
-    }
-    const indexed = index.get(rel);
-    const content = indexed?.content ?? (await index.readRepoFile(rel));
-    if (content === null) {
-      b.skip({ ...base, source }, 'No file at this path, so this @-reference is not an import.');
-      continue;
-    }
-    const warnings: string[] = [];
-    if (!isWithin(rel, target.cwd)) {
-      warnings.push(
-        'Outside the working directory: Claude Code asks for approval before loading external imports.',
-      );
-    }
-    if (isMarkdownPath(rel)) {
-      const parsed = indexed?.doc ?? parseMarkdown(rel, content, { estimator: index.estimator });
-      const s = b.include({ ...base, source, warnings }, transformed(parsed, content, false));
-      await expandImports(ctx, s, parsed, hop + 1);
-    } else {
-      b.include({ ...base, source, warnings }, identity(content));
-    }
-  }
+  await expandAtImports(index, b, s, entry.doc, 1, {
+    maxDepth: CLAUDE_MAX_IMPORT_HOPS,
+    transform: (d, c) => transformed(d, c, false),
+    warn: (rel) =>
+      isWithin(rel, ctx.target.cwd)
+        ? []
+        : [
+            'Outside the working directory: Claude Code asks for approval before loading external imports.',
+          ],
+  });
 }
 
 /**
@@ -199,6 +126,7 @@ export const claudeCodeAdapter: HarnessAdapter = {
     },
   ],
   verifiedOn: '2026-09-29',
+  command: 'claude',
   options: [
     {
       id: 'instructionFiles',

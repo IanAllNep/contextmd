@@ -1,7 +1,7 @@
 // End-to-end smoke test of the built desktop app (run `npm run build` first).
 // Drives Electron with Playwright against a temp copy of the example project and saves
 // screenshots to scripts/.smoke/. Exits non-zero on the first failed check.
-import { cp, mkdtemp, readFile, rm, writeFile, mkdir } from 'node:fs/promises';
+import { cp, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -219,6 +219,63 @@ await page.keyboard.press(`${mod}+K`);
 await page.getByPlaceholder('Type a command…').fill('');
 await shot('08-palette');
 await page.keyboard.press('Escape');
+
+await check('terminal agents are listed as built-in harnesses', async () => {
+  await page
+    .getByRole('button', { name: /Context/ })
+    .first()
+    .click();
+  const names = await page
+    .locator('.ctx-controls select')
+    .first()
+    .locator('option')
+    .allTextContents();
+  for (const n of ['Gemini CLI', 'Amp', 'GitHub Copilot CLI', 'OpenCode', 'Cursor CLI', 'Aider']) {
+    if (!names.some((x) => x.startsWith(n))) throw new Error(`missing harness ${n}: ${names}`);
+  }
+});
+
+await check('a repository spec appears live and cannot start commands', async () => {
+  await mkdir(join(repo, '.contextmd/harnesses'), { recursive: true });
+  await writeFile(join(repo, 'MYAGENT.md'), '# My agent rules\n');
+  await writeFile(
+    join(repo, '.contextmd/harnesses/my-agent.yaml'),
+    'id: my-agent\nname: My Agent\nfiles: [MYAGENT.md]\ncommand: echo should-not-be-offered\n',
+  );
+  const select = page.locator('.ctx-controls select').first();
+  await select
+    .locator('option', { hasText: 'My Agent' })
+    .waitFor({ state: 'attached', timeout: 8000 });
+  await select.selectOption('my-agent');
+  await page.locator('.fidelity-declared').waitFor();
+  await page.locator('.segment-path', { hasText: '/MYAGENT.md' }).waitFor();
+  if (await page.getByRole('button', { name: 'Start My Agent' }).count()) {
+    throw new Error('repository spec offered a command');
+  }
+});
+await shot('09-repo-spec');
+
+await check('embedded terminal runs a shell in the launch directory', async () => {
+  await page.getByRole('button', { name: /Open here/ }).click();
+  await page.locator('.terminal-panel .xterm').waitFor();
+  await page.locator('.terminal-panel .xterm-helper-textarea').focus();
+  await page.keyboard.type('echo contextmd-$((6*7))');
+  await page.keyboard.press('Enter');
+  await page
+    .locator('.terminal-panel .xterm-rows', { hasText: 'contextmd-42' })
+    .waitFor({ timeout: 10000 });
+});
+
+await check('"Start Claude Code" types the command without running it', async () => {
+  await page.locator('.ctx-controls select').first().selectOption('claude-code');
+  await page.getByRole('button', { name: 'Start Claude Code' }).click();
+  await page.locator('.terminal-tab.active', { hasText: 'claude' }).waitFor();
+  await page.locator('.terminal-hint', { hasText: 'Press Enter' }).waitFor();
+  await page
+    .locator('.terminal-panel .xterm-rows', { hasText: 'claude' })
+    .waitFor({ timeout: 10000 });
+});
+await shot('10-terminal');
 
 await check('no renderer errors', async () => {
   const real = errors.filter((e) => !/Autofill|DevTools/.test(e));

@@ -22,12 +22,19 @@ import {
   refreshRecent,
   reloadRepository,
   saveActive,
+  toggleTerminal,
   useStore,
 } from './store';
+import { applyTerminalTheme } from './lib/terminals';
 
 function useGlobalShortcuts(): void {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      if (e.ctrlKey && e.key === '`' && useStore.getState().snapshot) {
+        e.preventDefault();
+        toggleTerminal();
+        return;
+      }
       const mod = e.metaKey || e.ctrlKey;
       if (!mod) return;
       const k = e.key.toLowerCase();
@@ -63,6 +70,7 @@ function useTheme(): void {
         theme === 'dark' ||
         (theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
       document.documentElement.dataset['theme'] = dark ? 'dark' : 'light';
+      applyTerminalTheme();
     };
     apply();
     const mq = window.matchMedia('(prefers-color-scheme: dark)');

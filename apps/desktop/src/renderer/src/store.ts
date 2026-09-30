@@ -1,8 +1,20 @@
 import { create } from 'zustand';
 import type { AdapterOptions, ContextTarget, IndexProgress, SearchResult } from '@contextmd/core';
-import type { ContextResponse, RecentRepo, RepoEvent, RepoSnapshot } from '../../shared/api';
+import type {
+  ContextResponse,
+  RecentRepo,
+  RepoEvent,
+  RepoSnapshot,
+  TerminalInfo,
+} from '../../shared/api';
 import { api } from './api';
 import { dirOf, displayPath } from './lib/format';
+import {
+  disposeAllTerminals,
+  disposeTerminal,
+  onTerminalInput,
+  writeTerminal,
+} from './lib/terminals';
 
 export const CONTEXT_TAB = 'context://effective';
 
@@ -31,6 +43,12 @@ export interface Toast {
   id: number;
   kind: 'info' | 'success' | 'warning' | 'error';
   message: string;
+}
+
+export interface TerminalTab extends TerminalInfo {
+  exitCode: number | null;
+  /** The user has typed into this terminal (hides the "press Enter" hint). */
+  typed: boolean;
 }
 
 export type Modal =
@@ -97,6 +115,10 @@ export interface State extends Prefs {
   searchResult: SearchResult | null;
   searchFocusNonce: number;
 
+  terminals: TerminalTab[];
+  activeTerminal: number | null;
+  terminalOpen: boolean;
+
   palette: null | 'commands' | 'files' | 'dirs';
   modal: Modal;
   toasts: Toast[];
@@ -133,6 +155,9 @@ export const useStore = create<State>(() => ({
   searchAgentOnly: false,
   searchResult: null,
   searchFocusNonce: 0,
+  terminals: [],
+  activeTerminal: null,
+  terminalOpen: false,
   palette: null,
   modal: null,
   toasts: [],
@@ -198,6 +223,7 @@ function applySnapshot(snapshot: RepoSnapshot): void {
 }
 
 async function afterOpen(snapshot: RepoSnapshot): Promise<void> {
+  resetTerminals();
   set({
     tabs: [],
     activeTab: null,
@@ -258,6 +284,7 @@ export async function openRepository(path: string): Promise<void> {
 export async function closeRepository(): Promise<void> {
   if (!(await guardDirty('closing the repository'))) return;
   await api().closeRepository();
+  resetTerminals();
   set({
     snapshot: null,
     tabs: [],
@@ -466,6 +493,70 @@ export function handleRepoEvent(e: RepoEvent): void {
   else if (e.type === 'index-changed') applySnapshot(e.snapshot);
   else if (e.type === 'files-changed') void onFilesChanged(e.changed, e.removed);
   else if (e.type === 'watch-error') toast('error', `File watcher: ${e.message}`, 6000);
+  else if (e.type === 'terminal-data') writeTerminal(e.id, e.data);
+  else if (e.type === 'terminal-exit') {
+    writeTerminal(e.id, `\r\n\x1b[2m[process exited with code ${e.exitCode}]\x1b[0m\r\n`);
+    set((s) => ({
+      terminals: s.terminals.map((t) => (t.id === e.id ? { ...t, exitCode: e.exitCode } : t)),
+    }));
+  }
+}
+
+// ---------------------------------------------------------------- terminal
+
+onTerminalInput((id) => {
+  const t = get().terminals.find((x) => x.id === id);
+  if (t && !t.typed)
+    set((s) => ({ terminals: s.terminals.map((x) => (x.id === id ? { ...x, typed: true } : x)) }));
+});
+
+function resetTerminals(): void {
+  disposeAllTerminals();
+  set({ terminals: [], activeTerminal: null, terminalOpen: false });
+}
+
+/**
+ * Opens a shell in a repository directory (default: the context launch directory).
+ * With `adapterId`, that harness's command is typed at the prompt but not run.
+ */
+export async function newTerminal(opts: { cwd?: string; adapterId?: string } = {}): Promise<void> {
+  const s = get();
+  if (!s.snapshot) return;
+  try {
+    const req: { cwd: string; cols: number; rows: number; adapterId?: string } = {
+      cwd: opts.cwd ?? s.target.cwd,
+      cols: 100,
+      rows: 24,
+    };
+    if (opts.adapterId) req.adapterId = opts.adapterId;
+    const info = await api().terminalCreate(req);
+    set((st) => ({
+      terminals: [...st.terminals, { ...info, exitCode: null, typed: false }],
+      activeTerminal: info.id,
+      terminalOpen: true,
+    }));
+  } catch (e) {
+    toast('error', `Could not start a terminal: ${errMsg(e)}`, 6000);
+  }
+}
+
+export function killTerminal(id: number): void {
+  void api().terminalKill(id);
+  disposeTerminal(id);
+  set((s) => {
+    const terminals = s.terminals.filter((t) => t.id !== id);
+    return {
+      terminals,
+      activeTerminal: s.activeTerminal === id ? (terminals.at(-1)?.id ?? null) : s.activeTerminal,
+      terminalOpen: terminals.length > 0 && s.terminalOpen,
+    };
+  });
+}
+
+export function toggleTerminal(): void {
+  const s = get();
+  if (!s.terminalOpen && s.terminals.length === 0) void newTerminal();
+  else set({ terminalOpen: !s.terminalOpen });
 }
 
 // ---------------------------------------------------------------- navigation

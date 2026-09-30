@@ -128,6 +128,13 @@ export class RepositoryIndex {
     }
   }
 
+  /** Replaces the recognized filename patterns and reclassifies every document. */
+  setPatterns(patterns: readonly RecognizedPattern[]): void {
+    this.options.patterns = patterns;
+    for (const [path, d] of this.docs)
+      this.docs.set(path, { ...d, classification: classify(path, patterns) });
+  }
+
   // ---------------------------------------------------------------- queries
 
   get size(): number {

@@ -81,7 +81,16 @@ await page.locator('.result-line', { hasText: 'Create a migration' }).click();
 await snap('search');
 await hold(2);
 
-// 5. Command palette.
+// 5. Terminal: start Claude Code in the launch directory (typed, not run).
+await page.keyboard.press('Escape');
+await page.locator('.ctx-controls select').first().selectOption('claude-code');
+await page.getByRole('button', { name: 'Start Claude Code' }).click();
+await page.locator('.terminal-hint').waitFor();
+await pause(800);
+await snap('terminal-start-agent');
+await hold(2);
+
+// 6. Command palette.
 await page.keyboard.press('Meta+K');
 await snap('command-palette');
 await hold(1);

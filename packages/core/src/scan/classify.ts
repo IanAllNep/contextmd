@@ -62,6 +62,13 @@ export const RECOGNIZED_PATTERNS: readonly RecognizedPattern[] = [
     test: exact('AGENTS.override.md'),
   },
   {
+    id: 'agent-md',
+    label: 'AGENT.md',
+    kind: 'instructions',
+    harnesses: ['amp'],
+    test: exact('AGENT.md'),
+  },
+  {
     id: 'claude-md',
     label: 'CLAUDE.md',
     kind: 'instructions',

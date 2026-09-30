@@ -1,14 +1,17 @@
+import { api } from './api';
 import {
   CONTEXT_TAB,
   closeRepository,
   closeTab,
   copyContext,
   focusSearch,
+  newTerminal,
   openContextTab,
   openFile,
   openRepositoryDialog,
   reloadRepository,
   saveActive,
+  toggleTerminal,
   useStore,
   type Theme,
   type ViewMode,
@@ -133,6 +136,31 @@ export function getCommands(): Command[] {
       title: 'Toggle Experimental Conflict Detection',
       when: hasRepo,
       run: () => useStore.setState((st) => ({ experimentalConflicts: !st.experimentalConflicts })),
+    },
+    {
+      id: 'toggle-terminal',
+      title: 'Toggle Terminal',
+      shortcut: '⌃`',
+      when: hasRepo,
+      run: toggleTerminal,
+    },
+    {
+      id: 'new-terminal',
+      title: 'New Terminal in Launch Directory',
+      when: hasRepo,
+      run: () => void newTerminal(),
+    },
+    ...adapters
+      .filter((a) => a.command)
+      .map((a) => ({
+        id: `start-${a.id}`,
+        title: `Start ${a.name} in Terminal (types \`${a.command}\`)`,
+        run: () => void newTerminal({ adapterId: a.id }),
+      })),
+    {
+      id: 'harness-folder',
+      title: 'Open Your Harness Specs Folder…',
+      run: () => void api().openHarnessFolder(),
     },
     ...adapters.map((a) => ({
       id: `adapter-${a.id}`,

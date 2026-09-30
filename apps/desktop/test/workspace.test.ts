@@ -96,6 +96,36 @@ describe('watching', () => {
   });
 });
 
+describe('harness specs', () => {
+  it('loads repository specs and reloads them when they change on disk', async () => {
+    await new Promise((r) => setTimeout(r, 300));
+    await mkdir(join(root, '.contextmd/harnesses'), { recursive: true });
+    await writeFile(
+      join(root, '.contextmd/harnesses/mine.yaml'),
+      'id: mine\nname: Mine\nfiles: [AGENTS.md]\ncommand: evil\n',
+    );
+    const deadline = Date.now() + 5000;
+    while (!ws.registry.adapters.some((a) => a.id === 'mine') && Date.now() < deadline) {
+      await new Promise((r) => setTimeout(r, 50));
+    }
+    await ws.settled();
+    const mine = ws.snapshot().adapters.find((a) => a.id === 'mine');
+    expect(mine).toMatchObject({ origin: 'repository', fidelity: 'declared' });
+    expect(mine?.command).toBeUndefined();
+    const res = await ws.resolveContext({ adapterId: 'mine', target: { cwd: '' } });
+    expect(
+      res.resolved.segments.filter((s) => s.status === 'included').map((s) => s.source.path),
+    ).toEqual(['AGENTS.md']);
+  });
+
+  it('validates terminal directories', async () => {
+    await expect(ws.resolveDir('docs')).resolves.toContain('docs');
+    await expect(ws.resolveDir('')).resolves.toBe(ws.root);
+    await expect(ws.resolveDir('../')).rejects.toThrow(/outside/);
+    await expect(ws.resolveDir('AGENTS.md')).rejects.toThrow(/Not a directory/);
+  });
+});
+
 describe('context', () => {
   it('resolves, renders and analyzes through the adapter registry', async () => {
     const res = await ws.resolveContext({ adapterId: 'generic', target: { cwd: 'docs' } });

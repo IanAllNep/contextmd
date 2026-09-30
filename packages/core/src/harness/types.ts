@@ -18,6 +18,16 @@ export interface AdapterOptionSpec {
 
 export type AdapterOptions = Record<string, string | boolean | number>;
 
+/**
+ * - heuristic:  ContextMD's own approximation, not any tool's behavior
+ * - documented: follows the vendor's published documentation (see `references`)
+ * - declared:   defined by a user or repository spec file; ContextMD has not verified it
+ */
+export type AdapterFidelity = 'heuristic' | 'documented' | 'declared';
+
+/** Where an adapter came from. Repository specs are untrusted data. */
+export type AdapterOrigin = 'builtin' | 'repository' | 'user';
+
 export interface HarnessAdapter {
   id: string;
   name: string;
@@ -26,11 +36,16 @@ export interface HarnessAdapter {
    * 'heuristic': ContextMD's own approximation, not any tool's behavior.
    * 'documented': follows the vendor's published documentation (see `references`).
    */
-  fidelity: 'heuristic' | 'documented';
+  fidelity: AdapterFidelity;
   references: { title: string; url: string }[];
   /** Date the documented semantics were last checked against `references`. */
   verifiedOn?: string;
   options: AdapterOptionSpec[];
+  /** CLI command that starts this agent, offered in the terminal. Never set for repository specs. */
+  command?: string;
+  origin?: AdapterOrigin;
+  /** Spec file this adapter was loaded from (declarative adapters). */
+  sourceFile?: string;
   detect(index: RepositoryIndex): DetectionResult;
   resolve(
     index: RepositoryIndex,

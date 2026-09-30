@@ -1,4 +1,4 @@
-import { existsSync } from 'node:fs';
+import { existsSync, promises as fsp } from 'node:fs';
 import { join, resolve } from 'node:path';
 import {
   app,
@@ -13,6 +13,7 @@ import {
 import { toPosix } from '@contextmd/core/node';
 import { IPC, type ContextMdApi, type InvokeMethod, type RepoEvent } from '../shared/api';
 import { Recents } from './recents';
+import { TerminalManager } from './terminals';
 import { Workspace } from './workspace';
 
 const APP_NAME = 'ContextMD';
@@ -24,6 +25,26 @@ let mainWindow: BrowserWindow | null = null;
 let workspace: Workspace | null = null;
 let rendererDirty = false;
 const recents = new Recents(app.getPath('userData'));
+const userSpecDir = join(app.getPath('userData'), 'harnesses');
+const terminals = new TerminalManager((e) => mainWindow?.webContents.send(IPC.event, e));
+
+const HARNESS_README = `# Your harness specs
+
+Put one YAML or JSON file per agent here, e.g. my-agent.yaml:
+
+    id: my-agent
+    name: My Agent
+    command: my-agent          # typed into the terminal by "Start My Agent here"
+    traversal: root-to-cwd     # root-to-cwd | cwd-only | root-only | nearest
+    root: { markers: [.git] }
+    files: [MYAGENT.md, AGENTS.md]
+    perDirectory: first        # first | all
+    imports: { syntax: at, maxDepth: 3 }
+    maxBytes: 32768
+
+Then reload the repository in ContextMD (Cmd/Ctrl+Shift+R).
+The full format is documented in docs/harness-specs.md in the ContextMD repository.
+`;
 
 /** A repository path passed on the command line: `contextmd /path/to/repo`. */
 function launchRepositoryArg(): string | null {
@@ -44,9 +65,10 @@ function emit(event: RepoEvent): void {
 }
 
 async function openWorkspace(path: string) {
+  terminals.killAll();
   await workspace?.close();
   workspace = null;
-  const ws = await Workspace.open(toPosix(resolve(path)), emit);
+  const ws = await Workspace.open(toPosix(resolve(path)), emit, userSpecDir);
   workspace = ws;
   await recents.add(ws.root);
   mainWindow?.setTitle(`${ws.name} — ${APP_NAME}`);
@@ -74,6 +96,7 @@ const handlers: {
   getRecent: () => recents.list(),
   removeRecent: (path) => recents.remove(path),
   async closeRepository() {
+    terminals.killAll();
     await workspace?.close();
     workspace = null;
     mainWindow?.setTitle(APP_NAME);
@@ -91,6 +114,26 @@ const handlers: {
     // Only web and mail links; never file:// or custom protocols from untrusted Markdown.
     if (/^(https?:|mailto:)/i.test(url)) await shell.openExternal(url);
   },
+  async openHarnessFolder() {
+    await fsp.mkdir(userSpecDir, { recursive: true });
+    const readme = join(userSpecDir, 'README.md');
+    if (!existsSync(readme)) await fsp.writeFile(readme, HARNESS_README);
+    await shell.openPath(userSpecDir);
+  },
+  async terminalCreate({ cwd, adapterId, cols, rows }) {
+    const ws = requireWorkspace();
+    const abs = await ws.resolveDir(cwd);
+    // The command comes from our registry, never from the renderer. Repository specs have none.
+    const command = adapterId
+      ? ws.registry.adapters.find((a) => a.id === adapterId)?.command
+      : undefined;
+    const opts: { cols: number; rows: number; prefill?: string } = { cols, rows };
+    if (command) opts.prefill = command;
+    return terminals.create(abs, cwd, opts);
+  },
+  async terminalKill(id) {
+    terminals.kill(id);
+  },
   async revealInFolder(path) {
     shell.showItemInFolder(await requireWorkspace().resolveInside(path, { mustExist: true }));
   },
@@ -101,6 +144,14 @@ ipcMain.handle(IPC.invoke, async (event, method: string, ...args: unknown[]) => 
     throw new Error('Untrusted sender');
   if (!Object.hasOwn(handlers, method)) throw new Error(`Unknown method: ${method}`);
   return (handlers[method as InvokeMethod] as (...a: unknown[]) => unknown)(...args);
+});
+ipcMain.on(IPC.terminalInput, (_e, id: unknown, data: unknown) => {
+  if (typeof id === 'number' && typeof data === 'string') terminals.write(id, data);
+});
+ipcMain.on(IPC.terminalResize, (_e, id: unknown, cols: unknown, rows: unknown) => {
+  if (typeof id === 'number' && typeof cols === 'number' && typeof rows === 'number') {
+    terminals.resize(id, cols, rows);
+  }
 });
 ipcMain.on(IPC.dirty, (_e, dirty: unknown) => {
   rendererDirty = dirty === true;
@@ -189,6 +240,7 @@ app.whenReady().then(() => {
 });
 
 app.on('window-all-closed', () => {
+  terminals.killAll();
   void workspace?.close();
   if (process.platform !== 'darwin') app.quit();
 });

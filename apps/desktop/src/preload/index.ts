@@ -23,6 +23,9 @@ const methods: InvokeMethod[] = [
   'copyText',
   'openExternal',
   'revealInFolder',
+  'openHarnessFolder',
+  'terminalCreate',
+  'terminalKill',
 ];
 
 const api = Object.fromEntries(methods.map((m) => [m, invoke(m)])) as unknown as Omit<
@@ -33,6 +36,8 @@ const api = Object.fromEntries(methods.map((m) => [m, invoke(m)])) as unknown as
 const bridge: ContextMdApi = {
   ...api,
   setDirty: (dirty) => ipcRenderer.send(IPC.dirty, dirty),
+  terminalInput: (id, data) => ipcRenderer.send(IPC.terminalInput, id, data),
+  terminalResize: (id, cols, rows) => ipcRenderer.send(IPC.terminalResize, id, cols, rows),
   onEvent(listener) {
     const handler = (_e: unknown, event: RepoEvent) => listener(event);
     ipcRenderer.on(IPC.event, handler);

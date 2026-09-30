@@ -52,7 +52,7 @@ export interface ContextTarget {
 export interface ResolvedContext {
   adapterId: string;
   adapterName: string;
-  fidelity: 'heuristic' | 'documented';
+  fidelity: 'heuristic' | 'documented' | 'declared';
   target: ContextTarget;
   segments: ContextSegment[];
   totals: {

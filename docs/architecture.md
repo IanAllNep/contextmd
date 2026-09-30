@@ -20,12 +20,13 @@ packages/core        UI-independent analysis library (no Electron imports)
   src/markdown/      parsing (remark/mdast) → MarkdownDocument
   src/tokens/        TokenEstimator interface + heuristic estimator
   src/index/         RepositoryIndex: documents, directories, link graph, search, incremental updates
-  src/harness/       HarnessAdapter interface + adapters (generic, claude-code, codex)
+  src/harness/       HarnessAdapter interface, TS adapters (generic, claude-code, codex),
+                     declarative specs + engine, registry
   src/context/       ResolvedContext model, rendering/export, source maps
   src/diagnostics/   Diagnostic/Conflict model + deterministic detectors
 packages/cli         `contextmd` CLI (scan / context / search) on top of core
 apps/desktop         Electron app
-  src/main/          main process: owns the RepositoryIndex, watcher, file IO, IPC handlers
+  src/main/          main process: owns the RepositoryIndex, watcher, file IO, terminals, IPC
   src/preload/       typed, minimal bridge exposed as window.contextmd
   src/renderer/      React UI (Zustand store, components)
 examples/            fixture repositories used by tests and development
@@ -132,13 +133,40 @@ A `ResolvedContext` is an ordered list of **segments**. Each segment carries:
 **line-level source map** (`output line → source path + source line`). The UI uses it to jump
 from any line of the effective context back to its origin.
 
-Adapters implemented in v0.1:
+Adapters:
 
 - **Generic** (heuristic, not any vendor's behavior): recognized instruction files in each
   ancestor directory from repo root → target, then the target document itself.
-- **Claude Code** and **Codex**: follow the vendors' documented discovery rules (see each
-  adapter's `references`). Anything outside the repository (user/global files) is shown as an
-  _unread external source_ rather than read silently.
+- **Claude Code** and **Codex** (TypeScript): follow the vendors' documented discovery rules
+  (see each adapter's `references`).
+- **Declarative specs** (`harness/spec.ts`, engine in `harness/declarative.ts`): Gemini CLI,
+  Amp, Copilot CLI, OpenCode, Cursor CLI and Aider are built-in specs. Users and repositories
+  can add their own ([harness-specs.md](harness-specs.md)).
+
+Anything outside the repository (user/global files) is shown as an _unread external source_
+rather than read silently.
+
+### Harness registry
+
+`buildRegistry(userSpecs, repoSpecs)` (`harness/registry.ts`) combines the built-in adapters
+with validated spec files. Each adapter carries an `origin` (`builtin | user | repository`) and
+a `fidelity` (`heuristic | documented | declared`). Built-in ids are reserved, and user specs
+override repository specs. The registry also contributes filename patterns, so files a spec
+names (e.g. `MYAGENT.md`) are classified as instructions (`RepositoryIndex.setPatterns`). The
+desktop workspace reloads repository specs when `.contextmd/harnesses/` changes.
+
+## Terminal
+
+`apps/desktop/src/main/terminals.ts` (`TerminalManager`, node-pty) runs interactive shells.
+The renderer (`lib/terminals.ts`, xterm.js) keeps one terminal instance per tab outside React,
+so scrollback survives tab switches.
+
+- Output is coalesced (~8 ms) and pushed on the event channel. Input and resize use fire-and-forget
+  IPC channels with type checks in main.
+- `terminalCreate({ cwd, adapterId })`: main validates `cwd` with `Workspace.resolveDir` and
+  looks up the adapter's `command` itself. The renderer never sends a command. The command is
+  typed after the shell's first output and **not** followed by Enter.
+- Terminals are killed when the repository changes or the app closes.
 
 ## Diagnostics / conflicts
 
@@ -165,7 +193,10 @@ disk state), view mode, context target and adapter, search state. IPC events
 ## Security
 
 - Opening a repository never executes anything from it. No scripts, hooks, MCP servers or
-  commands from Markdown are run.
+  commands from Markdown are run. Harness specs are data; code plugins are deliberately not
+  supported.
+- The only place commands run is the embedded terminal, and only after the user clicks
+  (see [Terminal](#terminal) and [ADR 0002](adr/0002-declarative-harnesses-and-terminal.md)).
 - Renderer: `contextIsolation: true`, `sandbox: true`, `nodeIntegration: false`, strict CSP
   (`default-src 'self'`, no remote images/scripts), navigation and `window.open` blocked;
   external `http(s)` links open in the system browser only on click.

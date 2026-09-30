@@ -3,6 +3,9 @@
  * Paths are always repository-relative; the main process validates them.
  */
 import type {
+  AdapterFidelity,
+  AdapterOrigin,
+  SpecProblem,
   AdapterOptions,
   AdapterOptionSpec,
   Backlink,
@@ -24,10 +27,14 @@ export interface AdapterInfo {
   id: string;
   name: string;
   description: string;
-  fidelity: 'heuristic' | 'documented';
+  fidelity: AdapterFidelity;
   references: { title: string; url: string }[];
   verifiedOn?: string;
   options: AdapterOptionSpec[];
+  origin: AdapterOrigin;
+  /** CLI command that starts this agent (built-in and user harnesses only). */
+  command?: string;
+  sourceFile?: string;
   detected: boolean;
   evidence: string[];
 }
@@ -39,6 +46,8 @@ export interface RepoSnapshot {
   files: DocumentSummary[];
   directories: string[];
   adapters: AdapterInfo[];
+  /** Invalid or rejected harness spec files. */
+  harnessProblems: SpecProblem[];
   scanTruncated: boolean;
   ignoredCount: number;
   indexedAt: number;
@@ -87,7 +96,16 @@ export type RepoEvent =
   | { type: 'indexing'; progress: IndexProgress }
   | { type: 'index-changed'; snapshot: RepoSnapshot; summary: ChangeSummary }
   | { type: 'files-changed'; changed: string[]; removed: string[] }
-  | { type: 'watch-error'; message: string };
+  | { type: 'watch-error'; message: string }
+  | { type: 'terminal-data'; id: number; data: string }
+  | { type: 'terminal-exit'; id: number; exitCode: number };
+
+export interface TerminalInfo {
+  id: number;
+  title: string;
+  cwd: string;
+  prefill?: string;
+}
 
 export interface ContextMdApi {
   openRepositoryDialog(): Promise<RepoSnapshot | null>;
@@ -112,6 +130,21 @@ export interface ContextMdApi {
   copyText(text: string): Promise<void>;
   openExternal(url: string): Promise<void>;
   revealInFolder(path: string): Promise<void>;
+  /** Opens (creating if needed) the folder for your own harness specs. */
+  openHarnessFolder(): Promise<void>;
+  /**
+   * Starts an interactive shell in a repository directory. With `adapterId`, that harness's
+   * command is typed at the prompt (not run).
+   */
+  terminalCreate(opts: {
+    cwd: string;
+    adapterId?: string;
+    cols: number;
+    rows: number;
+  }): Promise<TerminalInfo>;
+  terminalKill(id: number): Promise<void>;
+  terminalInput(id: number, data: string): void;
+  terminalResize(id: number, cols: number, rows: number): void;
   setDirty(dirty: boolean): void;
   onEvent(listener: (event: RepoEvent) => void): () => void;
 }
@@ -120,6 +153,11 @@ export const IPC = {
   invoke: 'contextmd:invoke',
   event: 'contextmd:event',
   dirty: 'contextmd:dirty',
+  terminalInput: 'contextmd:terminal-input',
+  terminalResize: 'contextmd:terminal-resize',
 } as const;
 
-export type InvokeMethod = Exclude<keyof ContextMdApi, 'onEvent' | 'setDirty'>;
+export type InvokeMethod = Exclude<
+  keyof ContextMdApi,
+  'onEvent' | 'setDirty' | 'terminalInput' | 'terminalResize'
+>;

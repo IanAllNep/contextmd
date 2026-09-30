@@ -57,17 +57,81 @@ config reference pages.
 | Combined budget `project_doc_max_bytes` (32 KiB default); the crossing file is truncated, later files dropped                                    | documented default; truncation behavior from source | ✓ (truncated/skipped segments)                                    |
 | Projects that are not trusted skip project docs                                                                                                  | source                                              | noted                                                             |
 
-## Gemini CLI: not implemented
+## Terminal agents as declarative specs (documented, checked 2026-09-29)
 
-The docs and source disagree (downward subdirectory scan; stop condition without git; ordering
-after deduplication). Until that is settled, Gemini is represented only by `GEMINI.md`
-classification and the Generic adapter. Research notes, checked 2026-09-29:
+These are built-in [harness specs](harness-specs.md) in
+[`builtin-specs.ts`](../packages/core/src/harness/builtin-specs.ts). The `notes` in each spec
+restate the open questions below, and the UI shows them with every resolution.
 
-- Global `~/.gemini/GEMINI.md`; configurable `context.fileName` (string or list, e.g.
-  `AGENTS.md`); **all** configured names per directory (not one).
-- Upward search from cwd to the first directory with `context.memoryBoundaryMarkers`
-  (default `.git`).
-- Imports `@./file.md`, max depth 5, ignored in code.
-- Blocks wrapped as `--- Context from: <path> ---` … `--- End of Context from: <path> ---`.
-- Downward startup scan (up to 200 dirs) is still in the configuration docs but appears to be
-  replaced by just-in-time loading in the current source.
+### Gemini CLI
+
+Sources: `docs/cli/gemini-md.md`, `docs/reference/memport.md` and `docs/reference/configuration.md`
+in [google-gemini/gemini-cli](https://github.com/google-gemini/gemini-cli), plus
+`packages/core/src/utils/memoryDiscovery.ts`.
+
+| Behavior                                                                                                 | Status                                                                            | Spec                                           |
+| -------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- | ---------------------------------------------- |
+| Global `~/.gemini/GEMINI.md`                                                                             | documented                                                                        | `global`                                       |
+| Upward walk from cwd stops at the first directory with `context.memoryBoundaryMarkers` (default `.git`)  | documented                                                                        | `root: {markers: [.git]}`, `root-to-cwd`       |
+| All configured file names load in each directory (`context.fileName`, default `GEMINI.md`)               | source                                                                            | `perDirectory: all`, default name only (noted) |
+| Just-in-time loading when a tool touches a file: that directory and its ancestors up to the trusted root | documented (current gemini-md.md)                                                 | `onDemand: true`                               |
+| Downward startup scan (200 dirs)                                                                         | **stale**: still in configuration.md, absent from the current page and the source | not modelled                                   |
+| `@file` imports, max depth 5, ignored in code                                                            | documented                                                                        | `imports: {maxDepth: 5}`                       |
+| Behavior without a `.git`                                                                                | **uncertain** (docs vs source)                                                    | noted                                          |
+
+### Amp
+
+Source: <https://ampcode.com/docs/customize/agents-md>
+
+| Behavior                                                                                     | Status     | Spec                                                                    |
+| -------------------------------------------------------------------------------------------- | ---------- | ----------------------------------------------------------------------- |
+| `AGENTS.md` in cwd and parents up to `$HOME`; subtree files when the agent reads files there | documented | `root-to-cwd`, `onDemand`                                               |
+| Falls back to `AGENT.md` or `CLAUDE.md` if a directory has no `AGENTS.md`                    | documented | `perDirectory: first`; priority between the two fallbacks **uncertain** |
+| Global `~/.config/amp/AGENTS.md`, `~/.config/AGENTS.md`, system paths                        | documented | `global`                                                                |
+| `@` mentions relative to the file, ignored in code; `@~/` and absolute paths                 | documented | `imports` (depth undocumented → 5; globs not modelled)                  |
+| `globs` frontmatter on mentioned files                                                       | documented | **not modelled** (noted)                                                |
+
+### GitHub Copilot CLI
+
+Source: <https://docs.github.com/en/copilot/how-tos/copilot-cli/add-custom-instructions>
+
+| Behavior                                                                                                                        | Status                           | Spec                             |
+| ------------------------------------------------------------------------------------------------------------------------------- | -------------------------------- | -------------------------------- |
+| Repository root, cwd, directories between them, and directories on the path to the working file                                 | documented                       | `root-to-cwd`, `onDemand`        |
+| `AGENTS.md`, `CLAUDE.md`, `.claude/CLAUDE.md`, `GEMINI.md`, `.github/copilot-instructions.md`; all combined, duplicates removed | documented                       | `perDirectory: all`, `rootFiles` |
+| `.github/instructions/**/*.instructions.md` with `applyTo`                                                                      | documented                       | `rules` (root only)              |
+| Order between files                                                                                                             | documented as undefined          | ContextMD's order (noted)        |
+| File references expanded in AGENTS.md / CLAUDE.md                                                                               | documented, syntax **uncertain** | not expanded (noted)             |
+| Global `~/.copilot/…`, `COPILOT_HOME`, `COPILOT_CUSTOM_INSTRUCTIONS_DIRS`                                                       | documented                       | `global`                         |
+
+### OpenCode
+
+Source: <https://opencode.ai/docs/rules/>
+
+| Behavior                                                                                               | Status        | Spec                                        |
+| ------------------------------------------------------------------------------------------------------ | ------------- | ------------------------------------------- |
+| Local files found by traversing up from cwd: `AGENTS.md`, else `CLAUDE.md`; "first matching file wins" | documented    | `traversal: nearest`, `perDirectory: first` |
+| Where the walk stops, and whether several ancestors combine                                            | **uncertain** | nearest only (noted)                        |
+| Global `~/.config/opencode/AGENTS.md`, fallback `~/.claude/CLAUDE.md`                                  | documented    | `global`                                    |
+| `instructions` in opencode.json (globs, URLs)                                                          | documented    | **not modelled** (noted)                    |
+
+### Cursor CLI
+
+Sources: <https://cursor.com/docs/cli/using>, <https://cursor.com/docs/context/rules>
+
+| Behavior                                                                                                       | Status                                               | Spec                             |
+| -------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------- | -------------------------------- |
+| `AGENTS.md` and `CLAUDE.md` at the project root, alongside `.cursor/rules`                                     | documented                                           | `root-only`, `perDirectory: all` |
+| `.mdc` rules: `alwaysApply`, `globs`, description-only (agent decides); plain `.md` in `.cursor/rules` ignored | documented                                           | `rules`                          |
+| Nested `AGENTS.md`                                                                                             | documented for the editor; **uncertain** for the CLI | root only (noted)                |
+
+### Aider
+
+Sources: <https://aider.chat/docs/usage/conventions.html>, <https://aider.chat/docs/config/aider_conf.html>
+
+| Behavior                                           | Status                  | Spec                                |
+| -------------------------------------------------- | ----------------------- | ----------------------------------- |
+| No instruction file is loaded automatically        | documented (by absence) | `files: []`                         |
+| `read:` in `.aider.conf.yml` (home, git root, cwd) | documented              | `configReads` (home not read)       |
+| How `read:` paths are resolved                     | **uncertain**           | relative to the config file (noted) |
+| `--read` and `/read` during a session              | documented              | not modelled                        |

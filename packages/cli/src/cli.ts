@@ -3,8 +3,10 @@ import { parseArgs } from 'node:util';
 import {
   analyzeContext,
   BUILTIN_ADAPTERS,
+  buildRegistry,
+  loadRepoSpecs,
+  loadSpecsFromDir,
   exportContext,
-  getAdapter,
   isAgentFacing,
   normalizeRel,
   RepositoryIndex,
@@ -19,11 +21,14 @@ Usage:
   contextmd scan    [repo]                     List Markdown files and their roles
   contextmd context [repo] [options]           Print the effective context for a target
   contextmd search  <query> [repo] [--regex]   Search Markdown files
+  contextmd harnesses [repo]                   List harness adapters and spec problems
 
 Context options:
   --cwd <dir>        Launch directory, repo-relative (default: repository root)
   --file <path>      File the agent is working on (enables on-demand loading)
-  --adapter <id>     ${BUILTIN_ADAPTERS.map((a) => a.id).join(' | ')} (default: generic)
+  --adapter <id>     ${BUILTIN_ADAPTERS.map((a) => a.id).join(' | ')}
+                     or a spec id from .contextmd/harnesses (default: generic)
+  --harness-dir <d>  Also load your own harness specs from this directory
   --format <fmt>     markdown | plain | json | summary (default: summary)
   --option k=v       Adapter option, repeatable (e.g. instructionFiles=claude-md-and-agents-md)
   --conflicts        Include experimental conflict heuristics in diagnostics
@@ -47,6 +52,7 @@ async function main(): Promise<void> {
       option: { type: 'string', multiple: true },
       regex: { type: 'boolean' },
       conflicts: { type: 'boolean' },
+      'harness-dir': { type: 'string' },
       help: { type: 'boolean', short: 'h' },
     },
   });
@@ -57,7 +63,30 @@ async function main(): Promise<void> {
   }
   const repoArg = command === 'search' ? rest[1] : rest[0];
   const root = toPosix(resolve(repoArg ?? '.'));
-  const index = await RepositoryIndex.open(root, new NodeFileSystem());
+  const fs = new NodeFileSystem();
+  const index = await RepositoryIndex.open(root, fs);
+  const harnessDir = values['harness-dir'];
+  const registry = buildRegistry(
+    ...(harnessDir
+      ? [await loadSpecsFromDir(fs, toPosix(resolve(harnessDir)), 'user', harnessDir)]
+      : []),
+    await loadRepoSpecs(index),
+  );
+  index.setPatterns(registry.patterns);
+  for (const p of registry.problems) {
+    process.stderr.write(`contextmd: spec ${p.source}: ${p.errors.join(' ')}\n`);
+  }
+
+  if (command === 'harnesses') {
+    for (const a of registry.adapters) {
+      const det = a.detect(index).detected ? '●' : ' ';
+      process.stdout.write(
+        `${det} ${a.id.padEnd(16)}${a.fidelity.padEnd(12)}${a.origin ?? 'builtin'}${a.sourceFile ? ` (${a.sourceFile})` : ''}\n`,
+      );
+    }
+    process.stdout.write('\n● = files for this harness found in the repository\n');
+    return;
+  }
 
   if (command === 'scan') {
     for (const d of index.summaries()) {
@@ -90,7 +119,8 @@ async function main(): Promise<void> {
 
   if (command === 'context') {
     const adapter =
-      getAdapter(values.adapter ?? 'generic') ?? fail(`unknown adapter "${values.adapter}"`);
+      registry.adapters.find((a) => a.id === (values.adapter ?? 'generic')) ??
+      fail(`unknown adapter "${values.adapter}". Run contextmd harnesses to list them.`);
     const cwd = normalizeRel(values.cwd ?? '') ?? fail('--cwd must be inside the repository');
     const file = values.file
       ? (normalizeRel(values.file) ?? fail('--file must be inside the repository'))
@@ -139,5 +169,11 @@ async function main(): Promise<void> {
 
   fail(`unknown command "${command}". Run contextmd --help.`);
 }
+
+// Exit quietly when the reader goes away (e.g. `contextmd scan | head`).
+process.stdout.on('error', (e: NodeJS.ErrnoException) => {
+  if (e.code === 'EPIPE') process.exit(0);
+  throw e;
+});
 
 main().catch((e: unknown) => fail(e instanceof Error ? e.message : String(e)));

@@ -37,6 +37,7 @@ export const codexAdapter: HarnessAdapter = {
     },
   ],
   verifiedOn: '2026-09-29',
+  command: 'codex',
   options: [
     {
       id: 'maxBytes',
