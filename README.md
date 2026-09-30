@@ -1,4 +1,11 @@
+<div align="center">
+
 # ContextMD
+
+**See exactly what your AI coding agent sees.**
+
+A local-first desktop IDE that shows which `AGENTS.md` / `CLAUDE.md` / rules files your agent
+loads, in what order, what they cost in tokens, and where they contradict each other.
 
 [![CI](https://github.com/IanAllNep/contextmd/actions/workflows/ci.yml/badge.svg)](https://github.com/IanAllNep/contextmd/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
@@ -6,32 +13,33 @@
 ![Electron](https://img.shields.io/badge/Electron-47848F?logo=electron&logoColor=white)
 ![React](https://img.shields.io/badge/React-20232A?logo=react&logoColor=61DAFB)
 
-> A local-first desktop IDE that shows you exactly what your AI coding agent sees: which
-> `AGENTS.md` / `CLAUDE.md` / rules files it loads, in what order, what they cost in tokens, and
-> where they contradict each other.
-
-**Built with:** TypeScript · Electron · React · Zustand · CodeMirror 6 · remark (Markdown AST) ·
-Vitest · Playwright · GitHub Actions (macOS + Linux CI)
+[Why](#why) · [Screenshots](#screenshots) · [Supported agents](#supported-agents) ·
+[Quick start](#quick-start) · [How it works](#how-it-works) · [Docs](#documentation)
 
 ![ContextMD demo: generic context with a detected conflict, the Claude Code view, and line-level provenance](docs/screenshots/demo.gif)
 
-## The problem
+</div>
 
-Coding agents like Claude Code, Codex, Gemini CLI, Cursor and Copilot get much of their behavior
-from Markdown files: `AGENTS.md`, `CLAUDE.md`, nested per-directory instructions, rules, skills,
-prompt files and imports. These files work like **source code for agent behavior**, but you can't
-see them the way the agent does.
+## Why
 
-- Which files does the agent actually load when it starts in `backend/api/`?
-- In what order, and which one "wins"?
-- Where did this instruction come from?
-- How many tokens does all of this cost before you type a word?
-- Do two files contradict each other?
+Coding agents get much of their behavior from Markdown: `AGENTS.md`, `CLAUDE.md`, nested
+per-directory instructions, rules, skills and `@imports`. Those files are effectively **source
+code for agent behavior**, but you can't see them the way the agent does.
 
-## What ContextMD does
+ContextMD answers the questions you actually have when an agent misbehaves:
 
-It opens a local repository, finds every Markdown and instruction file, and shows the
-**effective context** for any directory or file. Every line is traced back to its source.
+| Question                                                          | ContextMD shows                                             |
+| ----------------------------------------------------------------- | ----------------------------------------------------------- |
+| Which files does the agent load when it starts in `backend/api/`? | The ordered list of sources, per harness                    |
+| Why is my instruction being ignored?                              | Files that exist but are **not loaded**, with the reason    |
+| Where did this line come from?                                    | Line-level provenance: click any line to jump to its source |
+| How much does this cost before I type anything?                   | Token estimates per file and in total                       |
+| Do my instructions contradict each other?                         | Duplicate and potential-conflict diagnostics                |
+
+### Example
+
+In the bundled [example project](examples/example-agent-project), the generic view of
+`backend/prompts/database.md` looks like this:
 
 ```text
 /AGENTS.md                        project     ~159 tokens
@@ -46,33 +54,35 @@ Effective context (Generic)                   ~399 tokens (estimate)
   /backend/AGENTS.md:7   “Create a migration whenever schema changes are required.”
 ```
 
-Switch the harness to **Claude Code** and the same repository tells a different story. With the
-default settings, `/backend/AGENTS.md` is **never loaded**, because a `CLAUDE.md` exists at the
-root. `AGENTS.md` reaches Claude only because `CLAUDE.md` imports it with `@AGENTS.md`.
-ContextMD's job is to surface findings like that one.
+Switch the harness to **Claude Code** and the story changes. With default settings,
+`/backend/AGENTS.md` is **never loaded**, because a `CLAUDE.md` exists at the root. The root
+`AGENTS.md` only arrives through `CLAUDE.md`'s `@AGENTS.md` import. Surfacing findings like this
+one is the point of ContextMD.
 
 ## Screenshots
 
-**Claude Code view.** With a root `CLAUDE.md`, Claude never reads `backend/AGENTS.md`. `AGENTS.md`
-arrives only through the `@AGENTS.md` import, and the HTML comment is stripped before Claude
-sees it.
-
-![Claude Code effective context with loaded and not-loaded sources](docs/screenshots/claude-code-context.png)
-
-**Generic view with diagnostics.** Four sources, per-source token estimates, and a potential
-conflict between the root and `backend/` instructions.
-
-![Generic effective context showing a potential conflict](docs/screenshots/generic-context-conflict.png)
-
-**Line-level provenance.** Every line of the concatenated context maps back to its source file
-and line. Click a line to jump there.
-
-![Full effective context view with source gutter](docs/screenshots/effective-context-provenance.png)
-
-**Start the agent where the context applies.** The embedded terminal opens in the launch
-directory with `claude` typed at the prompt. Nothing runs until you press Enter.
-
-![Embedded terminal with Claude Code typed at the prompt](docs/screenshots/terminal-start-agent.png)
+<table>
+  <tr>
+    <td width="50%" valign="top">
+      <img src="docs/screenshots/claude-code-context.png" alt="Claude Code effective context with loaded and not-loaded sources" />
+      <p><b>Harness-specific resolution.</b> Under Claude Code, <code>backend/AGENTS.md</code> is not loaded, and the panel says why.</p>
+    </td>
+    <td width="50%" valign="top">
+      <img src="docs/screenshots/generic-context-conflict.png" alt="Generic effective context showing a potential conflict" />
+      <p><b>Diagnostics.</b> Per-source token estimates and a potential conflict between root and <code>backend/</code> instructions.</p>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top">
+      <img src="docs/screenshots/effective-context-provenance.png" alt="Full effective context view with source gutter" />
+      <p><b>Line-level provenance.</b> Every line of the concatenated context maps back to its file and line.</p>
+    </td>
+    <td width="50%" valign="top">
+      <img src="docs/screenshots/terminal-start-agent.png" alt="Embedded terminal with Claude Code typed at the prompt" />
+      <p><b>Start the agent where the context applies.</b> <code>claude</code> is typed in the launch directory. Nothing runs until you press Enter.</p>
+    </td>
+  </tr>
+</table>
 
 <details>
 <summary>More: search and command palette</summary>
@@ -82,7 +92,121 @@ directory with `claude` typed at the prompt. Nothing runs until you press Enter.
 
 </details>
 
-Regenerate these with `npm run build && npm run screenshots`.
+## Features
+
+**Effective context**
+
+- Pick a launch directory (and optionally the file the agent works on) and see the ordered
+  sources that reach the agent, with token estimates
+- Files that exist but aren't loaded, with the reason: fallback rules, one file per directory,
+  byte budgets, path-scoped rules
+- Line-level provenance view; copy or export as Markdown, plain text or JSON with
+  `<!-- SOURCE: … -->` boundaries
+- Diagnostics: duplicated instructions, plus potential conflicts (an experimental heuristic that
+  can be switched off)
+
+**IDE**
+
+- CodeMirror editor, safe preview and split view, outline, metadata, links and **backlinks**
+- Fast repository-wide search with file, section, line and snippet
+- Command palette (`⌘K`), quick open (`⌘P`), keyboard-first, dark and light themes
+- **Conflict-safe saving**: it never overwrites a file that changed on disk; you get a diff
+  instead. External edits are picked up live.
+
+**Terminal**
+
+- Embedded terminal (xterm.js + node-pty) in the launch directory, with tabs, `` Ctrl+` `` to toggle
+- **Start ‹agent›** types `claude`, `codex`, `gemini`, … at the prompt without running it
+
+**Extensible and headless**
+
+- Describe any agent in YAML with [harness specs](docs/harness-specs.md), in your harness folder
+  or in `.contextmd/harnesses/` in a repository. No code needed.
+- CLI: `contextmd scan | context | search | harnesses`, for scripts, CI and agents
+
+## Supported agents
+
+| Harness                | How it discovers instructions                                                                                                               | Fidelity   | Start command  |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- | ---------- | -------------- |
+| **Claude Code**        | `CLAUDE.md` / `CLAUDE.local.md` root → cwd, `@imports` (4 hops), `.claude/rules` with `paths`, AGENTS.md fallback, subdirectories on demand | documented | `claude`       |
+| **Codex CLI**          | `AGENTS.override.md` / `AGENTS.md` git root → cwd, one per directory, 32 KiB budget                                                         | documented | `codex`        |
+| **Gemini CLI**         | `GEMINI.md` git root → cwd (all names), `@imports` (5), just-in-time subdirectories                                                         | documented | `gemini`       |
+| **Amp**                | `AGENTS.md`, else `AGENT.md` / `CLAUDE.md`, parents + subtrees, `@` mentions                                                                | documented | `amp`          |
+| **GitHub Copilot CLI** | `copilot-instructions.md`, `AGENTS.md`, `CLAUDE.md`, `GEMINI.md` combined; `applyTo` instructions                                           | documented | `copilot`      |
+| **OpenCode**           | Nearest `AGENTS.md`, else `CLAUDE.md`                                                                                                       | documented | `opencode`     |
+| **Cursor CLI**         | Root `AGENTS.md` + `CLAUDE.md`, `.cursor/rules/*.mdc` (alwaysApply / globs)                                                                 | documented | `cursor-agent` |
+| **Aider**              | Nothing automatic; `read:` entries in `.aider.conf.yml`                                                                                     | documented | `aider`        |
+| **Generic**            | ContextMD's own tool-neutral model                                                                                                          | heuristic  | none           |
+| **Your own**           | Any [harness spec](docs/harness-specs.md)                                                                                                   | declared   | from your spec |
+
+_Documented_ means the adapter follows the vendor's published docs, checked on the date in
+[harness-semantics.md](docs/harness-semantics.md). Anything the docs leave open is shown in the
+app as a note rather than guessed. Files outside the opened folder (for example
+`~/.claude/CLAUDE.md`) are listed but not read.
+
+## Quick start
+
+Requires Node.js ≥ 22.12 and npm ≥ 10. Runs on macOS, Linux and Windows.
+
+```bash
+git clone https://github.com/IanAllNep/contextmd.git && cd contextmd
+npm install
+npm run dev
+```
+
+Then choose **Open repository…**, or **Open example project** to explore the bundled demo. To
+open a folder directly, run `CONTEXTMD_OPEN=/path/to/repo npm run dev`.
+
+<details>
+<summary>CLI</summary>
+
+```bash
+npm run build -w @contextmd/cli
+node packages/cli/dist/cli.js harnesses examples/example-agent-project
+node packages/cli/dist/cli.js context examples/example-agent-project --adapter claude-code --file backend/api/handler.ts
+node packages/cli/dist/cli.js context examples/example-agent-project --cwd backend --format markdown
+node packages/cli/dist/cli.js search "migration" examples/example-agent-project
+```
+
+</details>
+
+<details>
+<summary>Development and quality checks</summary>
+
+```bash
+npm test             # unit + integration tests (Vitest)
+npm run check        # typecheck + lint + test + build
+npm run smoke        # drives the built Electron app with Playwright (after npm run build)
+npm run screenshots  # regenerates docs/screenshots (after npm run build; GIF needs ffmpeg)
+```
+
+If Electron or the terminal fails to start after install (some npm setups skip install
+scripts), run `node scripts/ensure-native.mjs`. On Linux, the terminal's native module compiles
+during install and needs `make` and a C++ compiler.
+
+</details>
+
+## How it works
+
+```mermaid
+flowchart LR
+  FS[Local files] --> SC[Scanner<br/>ignore rules]
+  SC --> MD[Markdown parser<br/>remark AST]
+  MD --> IX[Repository index<br/>links · search · watch]
+  IX --> AD{Harness adapter<br/>TypeScript or YAML spec}
+  AD --> RC[Resolved context<br/>segments + source map]
+  RC --> UI[Desktop app]
+  RC --> CLI[CLI]
+```
+
+- [`packages/core`](packages/core): a UI-independent library covering scanning, parsing,
+  indexing, search, harness adapters and diagnostics
+- [`packages/cli`](packages/cli): the headless CLI on the same core
+- [`apps/desktop`](apps/desktop): Electron + React. The main process owns the filesystem and
+  terminals; the sandboxed renderer only sees a typed API.
+
+**Built with:** TypeScript · Electron · React · Zustand · CodeMirror 6 · remark (Markdown AST) ·
+xterm.js · node-pty · Vitest · Playwright · GitHub Actions (macOS + Linux CI)
 
 ## Engineering highlights
 
@@ -90,170 +214,55 @@ Regenerate these with `npm run build && npm run screenshots`.
   live in `@contextmd/core`, shared by the Electron app and a headless CLI.
 - **Pluggable harness adapters.** Claude Code and Codex CLI loading rules are modeled from their
   documented semantics (imports, fallbacks, byte budgets), each with sources in
-  [docs/harness-semantics.md](docs/harness-semantics.md). Six more terminal agents (Gemini CLI,
-  Amp, Copilot CLI, OpenCode, Cursor CLI, Aider) are **declarative YAML specs** run by a generic
-  engine, which a test checks against the hand-written Codex adapter. Users and repositories can
-  add their own specs without code.
-- **Embedded terminal with a safe "start agent" flow.** xterm.js + node-pty. The command is
-  resolved in the main process and typed but never run for you, and repository-supplied specs
-  can't define commands.
+  [docs/harness-semantics.md](docs/harness-semantics.md). Six more terminal agents are
+  **declarative YAML specs** run by a generic engine, which a test checks against the
+  hand-written Codex adapter.
+- **Embedded terminal with a safe "start agent" flow.** The command is resolved in the main
+  process and typed but never run for you, and repository-supplied specs can't define commands.
 - **Security-first desktop architecture.** Sandboxed renderer behind a typed IPC API, strict CSP,
   path-traversal and symlink checks, and Markdown treated as untrusted input.
 - **Conflict-safe editing.** Incremental file watching, and saves that never clobber a file
   changed on disk; you get a diff instead.
-- **Tested end to end.** Vitest unit/integration tests, a Playwright smoke test that drives the
-  built Electron app, and CI on macOS and Linux.
-
-## Features
-
-Status labels: ✅ implemented · 🧪 experimental · 🗺️ roadmap
-
-**Repository**
-
-- ✅ Open any local folder; recent repositories remembered locally; no account, no network
-- ✅ Discovers `.md`, `.markdown`, `.mdx`, `.mdc`; skips `.git`, `node_modules`, `dist`, `build`,
-  `.next`, `target`, `vendor`, … and honours nested `.gitignore` files
-- ✅ Recognizes `AGENTS.md`, `CLAUDE.md`, `CLAUDE.local.md`, `GEMINI.md`, `AGENTS.override.md`,
-  Copilot instructions, `.claude/rules|skills|commands|agents`, Cursor rules, `README`,
-  `CONTRIBUTING` (easy to extend: [`classify.ts`](packages/core/src/scan/classify.ts))
-- ✅ File watching: external adds, edits and deletes update the tree and index incrementally
-
-**Editing**
-
-- ✅ CodeMirror editor, safe rendered preview, split view
-- ✅ Save writes to disk. Saving is **conflict-safe**: it never overwrites a file that changed on
-  disk since you loaded it. You get a diff and choose.
-- ✅ External changes reload clean buffers. Dirty buffers get a banner, and deleted files keep
-  their buffer.
-
-**Understanding**
-
-- ✅ Outline (click to navigate), metadata (words, chars, **estimated** tokens, links, mtime,
-  frontmatter)
-- ✅ Outgoing links with broken-link detection; **backlinks**
-- ✅ Fast repository-wide search with file, section, line and snippet (case, regex, agent-only)
-- ✅ Command palette (`⌘K`), quick open (`⌘P`), keyboard shortcuts, dark and light themes
-
-**Effective context**
-
-- ✅ Pick a launch directory (and optionally a working file) and see the ordered sources that
-  reach the agent, with per-source and total token estimates
-- ✅ Harness adapters:
-  - **Generic**: ContextMD's own heuristic, clearly labelled as such
-  - **Claude Code**: documented semantics (ancestors, `CLAUDE.local.md`, `@imports` up to 4
-    hops, `.claude/rules` with `paths`, the `AGENTS.md` fallback, on-demand subdirectories, HTML
-    comment stripping)
-  - **Codex CLI**: documented semantics (git root → cwd, one file per directory, override,
-    32 KiB budget with truncation)
-  - **Gemini CLI, Amp, GitHub Copilot CLI, OpenCode, Cursor CLI, Aider**: built-in
-    declarative specs following each vendor's docs; open questions are shown as notes
-- ✅ **Your own harnesses without code**: describe an agent in YAML/JSON
-  ([harness specs](docs/harness-specs.md)) in your harness folder or in
-  `.contextmd/harnesses/` in a repository. Invalid specs are reported, never fatal.
-- ✅ Files that exist but are **not loaded** are shown with the reason
-- ✅ Line-level provenance: open the full context view and click any line to jump to its source
-- ✅ Copy or export as Markdown, plain text or JSON, with `<!-- SOURCE: … -->` boundaries
-- ✅ Diagnostics: duplicated instructions across sources
-- 🧪 Potential-conflict hints (deterministic word-overlap heuristic; can be switched off)
-- ✅ Headless CLI: `contextmd scan | context | search | harnesses`
-
-**Terminal**
-
-- ✅ Embedded terminal (xterm.js + node-pty) opened in the launch directory; multiple tabs,
-  resizable, `⌃`` to toggle
-- ✅ **Start ‹agent›**: opens a terminal in the launch directory with the agent's command
-  (`claude`, `codex`, `gemini`, …) **typed but not run**; you press Enter
-
-**Roadmap**
-
-- 🗺️ More harnesses (Windsurf, Qwen Code, Continue, …) once their behavior is verified; configurable
-  file names (Gemini `context.fileName`, Codex fallbacks) for spec-based harnesses
-- 🗺️ Opt-in reading of user-level files (`~/.claude/CLAUDE.md`, `~/.codex/AGENTS.md`)
-- 🗺️ Context diff between git branches and commits; "what does this PR change for the agent?"
-- 🗺️ Real tokenizers (per-model), context budget warnings
-- 🗺️ Relationship graph view; stale-reference and unreachable-context detection
-- 🗺️ Optional AI-assisted explanations (never required)
-- 🗺️ Packaged installers (electron-builder), VS Code extension on the same core
-
-## Getting started
-
-Requirements: Node.js ≥ 22.12, npm ≥ 10. macOS, Linux or Windows.
-
-```bash
-git clone https://github.com/IanAllNep/contextmd.git && cd contextmd
-npm install
-npm run dev          # launches the desktop app with hot reload
-```
-
-Then click **Open repository…**, or **Open example project** to explore
-[`examples/example-agent-project`](examples/example-agent-project).
-
-To open a folder directly: `CONTEXTMD_OPEN=/path/to/repo npm run dev`.
-
-If Electron fails to start after install because its binary is missing, run
-`node scripts/ensure-native.mjs`. This happens with npm configurations that skip install
-scripts.
-
-### CLI
-
-```bash
-npm run build -w @contextmd/cli
-node packages/cli/dist/cli.js scan examples/example-agent-project
-node packages/cli/dist/cli.js context examples/example-agent-project --adapter claude-code --file backend/api/handler.ts
-node packages/cli/dist/cli.js context examples/example-agent-project --cwd backend --format markdown
-node packages/cli/dist/cli.js search "migration" examples/example-agent-project
-```
-
-### Quality checks
-
-```bash
-npm test             # unit + integration tests (Vitest)
-npm run typecheck
-npm run lint
-npm run build        # CLI + desktop production build
-npm run smoke        # drives the built app with Playwright (requires npm run build)
-npm run screenshots  # regenerates docs/screenshots (requires npm run build; GIF needs ffmpeg)
-npm run check        # typecheck + lint + test + build
-```
-
-## How it works
-
-```text
-filesystem → scanner → Markdown parser (remark AST) → repository index → harness adapter → resolved context → UI
-```
-
-- [`packages/core`](packages/core) is a UI-independent library. It does the scanning,
-  parsing, index, search, adapters and diagnostics.
-- [`packages/cli`](packages/cli) is a headless CLI built on the core.
-- [`apps/desktop`](apps/desktop) is an Electron + React app. The main process owns the
-  filesystem; the sandboxed renderer only sees a typed API.
-
-See [docs/architecture.md](docs/architecture.md),
-[ADR 0001](docs/adr/0001-runtime-and-stack.md),
-[ADR 0002](docs/adr/0002-declarative-harnesses-and-terminal.md),
-[docs/harness-specs.md](docs/harness-specs.md) and
-[docs/harness-semantics.md](docs/harness-semantics.md) (what each adapter is based on, and what
-is uncertain).
+- **Tested end to end.** Vitest unit and integration tests, a Playwright smoke test that drives
+  the built Electron app (including the terminal), and CI on macOS and Linux.
 
 ## Privacy and security
 
-- Everything is local. There is no telemetry, no account, and no network access except links
-  you click.
-- ContextMD never executes anything **on its own**. Opening a repository runs nothing: no
-  scripts, hooks, MCP servers or commands found in Markdown.
-- The embedded terminal starts a shell only when you click, in a directory inside the opened
-  repository. "Start ‹agent›" types the command without pressing Enter. Repository harness
-  specs cannot define commands, and built-in ids can't be overridden
-  ([ADR 0002](docs/adr/0002-declarative-harnesses-and-terminal.md)).
-- Markdown is treated as untrusted. Raw HTML is never rendered (it shows as text), images aren't loaded, and a strict
-  CSP applies.
-- The renderer is sandboxed. All file access goes through the main process, which rejects paths
-  outside the opened repository (including through symlinks).
+- **Local only.** There is no telemetry, no account, no API key, and no network access except
+  links you click.
+- **Nothing runs on its own.** Opening a repository never executes scripts, hooks, MCP servers
+  or commands from Markdown. The terminal starts only when you click, and agent commands are
+  typed, not run.
+- **Untrusted input stays contained.** Raw HTML in Markdown is shown as text, images aren't
+  loaded, and a strict CSP applies. Repository harness specs are data: they can't define
+  commands or replace built-in harnesses.
+- **Sandboxed renderer.** All file access goes through the main process, which rejects paths
+  outside the opened repository, including through symlinks.
+
+## Roadmap
+
+- [x] Effective context with provenance for 8 agents, plus user-defined harnesses
+- [x] Embedded terminal with "start agent here"
+- [ ] Opt-in reading of user-level files (`~/.claude/CLAUDE.md`, `~/.codex/AGENTS.md`)
+- [ ] Context diff between git branches: "what does this PR change for the agent?"
+- [ ] Per-model tokenizers and context budget warnings
+- [ ] Packaged installers and a VS Code extension on the same core
+- [ ] Optional AI-assisted explanations (never required)
+
+## Documentation
+
+| Document                                                                                                         | What's in it                                                            |
+| ---------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
+| [Architecture](docs/architecture.md)                                                                             | Pipeline, data model, IPC, watching, security                           |
+| [Harness specs](docs/harness-specs.md)                                                                           | Writing your own agent definition in YAML/JSON                          |
+| [Harness semantics](docs/harness-semantics.md)                                                                   | What each built-in adapter is based on, with sources and open questions |
+| [ADR 0001](docs/adr/0001-runtime-and-stack.md) · [ADR 0002](docs/adr/0002-declarative-harnesses-and-terminal.md) | Why Electron; declarative harnesses and the terminal                    |
+| [Progress](docs/progress.md)                                                                                     | Current state, limitations and next steps                               |
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md). Adapter contributions need sources: see
-[docs/harness-semantics.md](docs/harness-semantics.md).
+Contributions are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md). New harnesses need sources:
+see [harness-semantics.md](docs/harness-semantics.md).
 
 ## License
 
