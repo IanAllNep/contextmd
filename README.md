@@ -90,7 +90,13 @@ Regenerate these with `npm run build && npm run screenshots`.
   live in `@contextmd/core`, shared by the Electron app and a headless CLI.
 - **Pluggable harness adapters.** Claude Code and Codex CLI loading rules are modeled from their
   documented semantics (imports, fallbacks, byte budgets), each with sources in
-  [docs/harness-semantics.md](docs/harness-semantics.md).
+  [docs/harness-semantics.md](docs/harness-semantics.md). Six more terminal agents (Gemini CLI,
+  Amp, Copilot CLI, OpenCode, Cursor CLI, Aider) are **declarative YAML specs** run by a generic
+  engine, which a test checks against the hand-written Codex adapter. Users and repositories can
+  add their own specs without code.
+- **Embedded terminal with a safe "start agent" flow.** xterm.js + node-pty. The command is
+  resolved in the main process and typed but never run for you, and repository-supplied specs
+  can't define commands.
 - **Security-first desktop architecture.** Sandboxed renderer behind a typed IPC API, strict CSP,
   path-traversal and symlink checks, and Markdown treated as untrusted input.
 - **Conflict-safe editing.** Incremental file watching, and saves that never clobber a file
