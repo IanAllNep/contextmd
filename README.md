@@ -2,9 +2,16 @@
 
 [![CI](https://github.com/IanAllNep/contextmd/actions/workflows/ci.yml/badge.svg)](https://github.com/IanAllNep/contextmd/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?logo=typescript&logoColor=white)
+![Electron](https://img.shields.io/badge/Electron-47848F?logo=electron&logoColor=white)
+![React](https://img.shields.io/badge/React-20232A?logo=react&logoColor=61DAFB)
 
-> Working title. A local-first IDE for understanding, editing and debugging the Markdown that
-> controls AI coding agents.
+> A local-first desktop IDE that shows you exactly what your AI coding agent sees: which
+> `AGENTS.md` / `CLAUDE.md` / rules files it loads, in what order, what they cost in tokens, and
+> where they contradict each other.
+
+**Built with:** TypeScript · Electron · React · Zustand · CodeMirror 6 · remark (Markdown AST) ·
+Vitest · Playwright · GitHub Actions (macOS + Linux CI)
 
 ![ContextMD demo: generic context with a detected conflict, the Claude Code view, and line-level provenance](docs/screenshots/demo.gif)
 
@@ -72,6 +79,20 @@ and line. Click a line to jump there.
 
 Regenerate these with `npm run build && npm run screenshots`.
 
+## Engineering highlights
+
+- **Monorepo with a UI-independent core.** Scanning, parsing, indexing, search and harness logic
+  live in `@contextmd/core`, shared by the Electron app and a headless CLI.
+- **Pluggable harness adapters.** Claude Code and Codex CLI loading rules are modeled from their
+  documented semantics (imports, fallbacks, byte budgets), each with sources in
+  [docs/harness-semantics.md](docs/harness-semantics.md).
+- **Security-first desktop architecture.** Sandboxed renderer behind a typed IPC API, strict CSP,
+  path-traversal and symlink checks, and Markdown treated as untrusted input.
+- **Conflict-safe editing.** Incremental file watching, and saves that never clobber a file
+  changed on disk; you get a diff instead.
+- **Tested end to end.** Vitest unit/integration tests, a Playwright smoke test that drives the
+  built Electron app, and CI on macOS and Linux.
+
 ## Features
 
 Status labels: ✅ implemented · 🧪 experimental · 🗺️ roadmap
@@ -135,7 +156,7 @@ Status labels: ✅ implemented · 🧪 experimental · 🗺️ roadmap
 Requirements: Node.js ≥ 22.12, npm ≥ 10. macOS, Linux or Windows.
 
 ```bash
-git clone <this repo> contextmd && cd contextmd
+git clone https://github.com/IanAllNep/contextmd.git && cd contextmd
 npm install
 npm run dev          # launches the desktop app with hot reload
 ```
